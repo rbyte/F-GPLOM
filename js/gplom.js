@@ -5,19 +5,28 @@ function interfaceInit() {
 //	scatter()
 //	histTest()
 //	heatmapTest()
+	main()
+}
 
+function main() {
 	parseData("data/SHIP_2012_D_S2_20121129.json")
 	
+//	var bla = {arr:[1,2,3,4]}
+//	bla.arr.splice(2,1)
+//	console.log(bla.arr)
+	
 //	createTestData(100)
-//	
-//	var width = 960, height = 520
-//	
-//	var svg = d3.select("body").append("svg")
-//		.attr("width", width)
-//		.attr("height", height)
-//	
-//	definedGradients(svg)
-//	createGplomMatrix(svg, 30, 30, 500, 500)
+}
+
+function draw() {
+	var width = 1000, height = 800
+	
+	var svg = d3.select("body").append("svg")
+		.attr("width", width)
+		.attr("height", height)
+	
+	definedGradients(svg)
+	createGplomMatrix(svg, 30, 30, 800, 500)
 //	stream(svg)
 }
 
@@ -75,10 +84,25 @@ function parseData(filename) {
 				}
 			}
 			varId++
+			
+			if (varId > 10)
+				break
+			
 		}
-//		document.write(JSON.stringify(data))
+		console.log("parsing data done")
 		for (var i=0; i<vars.length; i++)
-			console.log(vars[i].data)
+			console.log(vars[i].dictionary)
+		
+//		purgeDictEntriesNotFoundInData()
+//		
+//		for (var i=0; i<vars.length; i++)
+//			console.log(vars[i].dictionary)
+//		
+//		for (var i=0; i<vars.length; i++)
+//			console.log(vars[i].data)
+		
+		draw()
+		console.log("done!")
 	})
 }
 
@@ -89,6 +113,30 @@ function convertStrToNumber(val) {
 	if (isNaN(number) || number === undefined)
 		console.log("could not parse: "+val)
 	return number
+}
+
+function purgeDictEntriesNotFoundInData() {
+	for (var i=0; i<vars.length; i++) {
+		var isMetric = vars[i].dataType === "metric"
+		if (vars[i].hasOwnProperty("dictionary") && !isMetric)
+			for (var k=0; k<vars[i].dictionary.length; k++) {
+				var foundEntry = false
+				for (var m=0; m<vars[i].data.length; m++) {
+					var dictId = vars[i].data[m]
+					if (isMetric) {
+						if (typeof dictId !== "string")
+							continue
+						dictId = parseInt(dictId)
+					}
+					if (dictId === k) {
+						foundEntry = true
+						break
+					}
+				}
+				if (!foundEntry)
+					vars[i].dictionary.splice(k, 1)
+			}
+	}
 }
 
 function stream(svg) {
@@ -223,25 +271,30 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 			}
 			if (catIdY !== -1) { // heatmap
 				console.assert(catIdX !== -1 && catIdX !== catIdY)
-				drawHeatmap(svg, x, y, w, h,
+				drawHeatmap(svg.append("g"), x, y, w, h,
 					getHeatmapDataFromVars(catIdX, catIdY))
 			} else {
 				if (catIdX !== -1) { // histogram
-					drawHistogram(svg, x, y, w, h,
+					drawHistogram(svg.append("g"), x, y, w, h,
 						getHistogramDataFromVars(catIdX, metricIdY))
 					// create new stream from each category
+					if (false) {
+						
 					var catBuckets = []
 					for (var m=0; m<vars[catIdX].dictionary.length; m++)
 						catBuckets.push([])
 					for (var m=0; m<vars[metricIdY].data.length; m++)
 						catBuckets[vars[catIdX].data[m]].push(vars[metricIdY].data[m])
 					for (var m=0; m<vars[catIdX].dictionary.length; m++)
-						drawKDE(svg, x, y, w, h, catBuckets[m])
+						drawKDE(svg.append("g"), x, y, w, h, catBuckets[m])
+						
+					}
 				} else { // scatterplot
 					metricIdX = nextMetric(metricIdX)
 					console.assert(metricIdX !== -1)
 					w = wGlobal / vars.length
-					drawScatterplotFormat(svg, x, y, w, h, vars[metricIdX].data, vars[metricIdY].data)
+					if (false)
+					drawScatterplotFormat(svg.append("g"), x, y, w, h, vars[metricIdX].data, vars[metricIdY].data)
 				}
 			}
 			x += w + (wGlobal*marginToTotal/(vars.length-1))
@@ -296,7 +349,8 @@ function getHistogramDataFromVars(catId, metricId) {
 	for (var i=0; i<result.length; i++)
 		result[i] = 0
 	for (var i=0; i<vars[catId].data.length; i++)
-		result[vars[catId].data[i]] += vars[metricId].data[i]
+		if (typeof vars[metricId].data[i] !== "string")
+			result[vars[catId].data[i]] += vars[metricId].data[i]
 	return result
 }
 
@@ -312,7 +366,8 @@ function getHeatmapDataFromVars(v1id, v2id) {
 	}
 	
 	for (var i=0; i<vars[v1id].data.length; i++)
-		result[vars[v1id].data[i]][vars[v2id].data[i]]++
+		if (typeof vars[v1id].data[i] !== "string" && typeof vars[v2id].data[i] !== "string")
+			result[vars[v1id].data[i]][vars[v2id].data[i]]++
 	return result
 }
 
@@ -496,16 +551,26 @@ function scatter() {
 
 function drawScatterplotFormat(svg, x, y, w, h, vX, vY) {
 	console.assert(vX.length === vY.length)
-	var Xmax = vX[0]
-	var Xmin = vX[0]
-	var Ymax = vY[0]
-	var Ymin = vY[0]
-	for (var i=1; i<vX.length; i++) {
-		if (vX[i] > Xmax) Xmax = vX[i]
-		if (vX[i] < Xmin) Xmin = vX[i]
-		if (vY[i] > Ymax) Ymax = vY[i]
-		if (vY[i] < Ymin) Ymin = vY[i]
+	for (var i=0; i<vX.length; i++) {
+		if (typeof vX[i] === "string" || typeof vY[i] === "string") {
+			vX.splice(i, 1)
+			vY.splice(i, 1)
+		}
 	}
+	
+	var minMax = getMinMax(vX), Xmin = minMax[0], Xmax = minMax[1]
+	var minMax = getMinMax(vY), Ymin = minMax[0], Ymax = minMax[1]
+	
+//	var Xmax = vX[0]
+//	var Xmin = vX[0]
+//	var Ymax = vY[0]
+//	var Ymin = vY[0]
+//	for (var i=1; i<vX.length; i++) {
+//		if (vX[i] > Xmax) Xmax = vX[i]
+//		if (vX[i] < Xmin) Xmin = vX[i]
+//		if (vY[i] > Ymax) Ymax = vY[i]
+//		if (vY[i] < Ymin) Ymin = vY[i]
+//	}
 	if (Xmax === Xmin) {
 		Xmax += 1
 		Xmin -= 1
