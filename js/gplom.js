@@ -19,7 +19,7 @@ function main() {
 }
 
 function draw() {
-	var width = 1000, height = 800
+	var width = 1100, height = 850
 	
 	var svg = d3.select("body").append("svg")
 		.attr("width", width)
@@ -94,7 +94,7 @@ function parseData(filename) {
 					if (isMetric && vars[varId].data[i] === undefined)
 						vars[varId].data[i] = convertStrToNumber(val)
 				}
-				console.log(newDict)
+//				console.log(newDict)
 				vars[varId].dictionary = newDict
 			} else {
 				if (desc.dataType === "metric") {
@@ -104,7 +104,7 @@ function parseData(filename) {
 			}
 			varId++
 			
-			if (varId > 25)
+			if (varId > 10)
 				break
 			
 		}
@@ -306,7 +306,7 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 					metricIdX = nextMetric(metricIdX)
 					console.assert(metricIdX !== -1)
 					w = wGlobal / vars.length
-					if (false)
+//					if (false)
 					drawScatterplotFormat(svg.append("g"), x, y, w, h, vars[metricIdX].data, vars[metricIdY].data)
 				}
 			}
@@ -563,42 +563,57 @@ function scatter() {
 }
 
 function drawScatterplotFormat(svg, x, y, w, h, vX, vY) {
+	var maxPointsDisplayed = 50
 	console.assert(vX.length === vY.length)
-	for (var i=0; i<vX.length; i++) {
-		if (typeof vX[i] === "string" || typeof vY[i] === "string") {
+	
+	for (var i=0; i<Math.max(vX.length,vY.length); i++) {
+		if (typeof vX[i] === "string" || typeof vY[i] === "string"
+			|| isNaN(vY[i]) || isNaN(vX[i])
+			|| vY[i] === undefined || vX[i] === undefined) {
 			vX.splice(i, 1)
 			vY.splice(i, 1)
 		}
 	}
+	var minLength = Math.min(vX.length,vY.length)
 	
 	var minMax = getMinMax(vX), Xmin = minMax[0], Xmax = minMax[1]
 	var minMax = getMinMax(vY), Ymin = minMax[0], Ymax = minMax[1]
-	
-//	var Xmax = vX[0]
-//	var Xmin = vX[0]
-//	var Ymax = vY[0]
-//	var Ymin = vY[0]
-//	for (var i=1; i<vX.length; i++) {
-//		if (vX[i] > Xmax) Xmax = vX[i]
-//		if (vX[i] < Xmin) Xmin = vX[i]
-//		if (vY[i] > Ymax) Ymax = vY[i]
-//		if (vY[i] < Ymin) Ymin = vY[i]
-//	}
-	if (Xmax === Xmin) {
+	if (Xmax-Xmin < 0.0001) {
 		Xmax += 1
 		Xmin -= 1
 	}
-	if (Ymax === Ymin) {
+	if (Ymax-Ymin < 0.0001) {
 		Ymax += 1
 		Ymin -= 1
 	}
+	if (minLength > maxPointsDisplayed)
+		var randomId = uniqueRandomNumbersArray(maxPointsDisplayed, minLength-1)
 	
-	for (var i=0; i<vX.length; i++) {
+	for (var i=0; i<maxPointsDisplayed && i<minLength; i++) {
+		var idx = minLength > maxPointsDisplayed ? randomId[i] : i
 		svg
 		.append("circle")
 		.style("fill", "url(#g1)")
 		.attr("r", 4)
-		.attr("cx", x+w*((vX[i]-Xmin)/(Xmax-Xmin)))
-		.attr("cy", y+h*(1-(vY[i]-Ymin)/(Ymax-Ymin)))
+		.attr("cx", x+w*((vX[idx]-Xmin)/(Xmax-Xmin)))
+		.attr("cy", y+h*(1-(vY[idx]-Ymin)/(Ymax-Ymin)))
 	}
+}
+
+function uniqueRandomNumbersArray(length, rangeMax) {
+	console.assert(length <= rangeMax)
+	var randomId = []
+	while (randomId.length < length) {
+		var randomnumber=Math.ceil(Math.random()*rangeMax)
+		var found = false
+		for (var i=0; i<randomId.length; i++) {
+			if(randomId[i] === randomnumber) {
+				found=true
+				break
+			}
+		}
+		if (!found)
+			randomId[randomId.length] = randomnumber
+	}
+	return randomId
 }
