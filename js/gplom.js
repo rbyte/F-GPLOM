@@ -1,23 +1,13 @@
-// name, type, range or catagories
-var vars = [
-	["v1", "float", [30, 50]],
-	["v2", "ordinal", [3,5,7,9]],
-	["v3", "nominal", ["yes", "no", "kA"]],
-	["v4", "ordinal", ["1-3", "3-10", "10-100"]],
-	["v5", "float", [0, 100]]
-]
+var vars
 var data
-
-// json -> object with names
-// .. name: object with name, description and data
-// .. description: object with name, detail, dataType
-// .. data: array of strings (even if numbers inside)
 
 function interfaceInit() {
 	console.log("hi console :)")
 //	scatter()
 //	histTest()
 //	heatmapTest()
+
+//	parseData("data/SHIP_2012_D_S2_20121129.json")
 	
 	data = createTestData(100)
 	
@@ -30,6 +20,76 @@ function interfaceInit() {
 	definedGradients(svg)
 	createGplomMatrix(svg, 30, 30, 500, 500, data)
 	stream(svg)
+}
+
+function parseData(filename) {
+	vars = []
+	data = []
+	var varId = 0
+	d3.json(filename, function(jsonData) {
+		for (var key in jsonData) {
+			var jsonDataKey = jsonData[key]
+			console.assert(jsonDataKey.hasOwnProperty("name"))
+			console.assert(jsonDataKey.hasOwnProperty("data"))
+			console.assert(jsonDataKey.hasOwnProperty("description"))
+			
+			var desc = jsonDataKey.description
+			console.assert(desc.hasOwnProperty("name"))
+				// ordinal, metric, dichotomous, nominal
+			console.assert(desc.hasOwnProperty("dataType"))
+			console.assert(desc.hasOwnProperty("detail"))
+			vars.push(desc)
+			
+			var isMetric = desc.dataType === "metric"
+			var hasDict = desc.hasOwnProperty("dictionary")
+			if (hasDict) {
+				var newDict = []
+				for (var dictKey in desc.dictionary) {
+					newDict.push(desc.dictionary[dictKey])
+				}
+				
+				data.push(new Array(jsonDataKey.data.length))
+				
+				for (var i=0; i<data[varId].length; i++) {
+					var val = jsonDataKey.data[i]
+//					console.assert(typeof val === "string")
+					if (!isMetric)
+						console.assert(desc.dictionary.hasOwnProperty(val))
+					
+					for (var k=0; k<newDict.length; k++)
+						if (desc.dictionary[val] === newDict[k])
+							data[varId][i] = isMetric ? ""+k : k
+					
+					if (isMetric && data[varId][i] === undefined)
+						data[varId][i] = convertStrToNumber(val)
+				}
+				vars[varId].dictionary = newDict
+			} else {
+				if (desc.dataType === "metric") {
+					data.push(new Array(jsonDataKey.data.length))
+					for (var i=0; i<data[varId].length; i++)
+						data[varId][i] = convertStrToNumber(jsonDataKey.data[i])
+				} else {
+					// I dont know how to interpret that
+					console.log("skipping: "+desc.name)
+					continue
+				}
+			}
+			varId++
+		}
+//		document.write(JSON.stringify(data))
+		
+		console.log(data)
+	})
+}
+
+function convertStrToNumber(val) {
+	var number = parseInt(val)
+	if (isNaN(number))
+		number = parseFloat(val)
+	if (isNaN(number) || number === undefined)
+		console.log("could not parse: "+val)
+	return number
 }
 
 function stream(svg) {
@@ -139,25 +199,25 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal, data) {
 	
 	var x = xGlobal, y = yGlobal
 	// on the y-axis, we start with cat no 2
-	var floatIdX, catIdX, floatIdY, catIdY = nextCat()
+	var metricIdX, catIdX, metricIdY, catIdY = nextCat()
 	
 	// row iteration (y-axis)
 	for (var i=0; i<vars.length-1; i++) {
 		catIdY = nextCat(catIdY)
 		var h
 		if (catIdY !== -1) { // heatmaps
-			h = vars[catIdY][2].length * barHeight
+			h = vars[catIdY].dictionary.length * barHeight
 		} else {
 			h = hGlobal / vars.length
-			floatIdY = nextFloat(floatIdY)
-			console.assert(floatIdY !== -1)
+			metricIdY = nextMetric(metricIdY)
+			console.assert(metricIdY !== -1)
 		}
 		// column iteration (x-axis)
 		for (var k=0; k<i+1; k++) {
 			catIdX = nextCat(catIdX)
 			var w
 			if (catIdX !== -1) {
-				var cardinality = vars[catIdX][2].length
+				var cardinality = vars[catIdX].dictionary.length
 				w = (cardinality > cardinalityWidthCap
 					? cardinalityWidthCap
 					: cardinality) * barWidth
@@ -169,32 +229,32 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal, data) {
 			} else {
 				if (catIdX !== -1) { // histogram
 					drawHistogram(svg, x, y, w, h,
-						getHistogramDataFromVars(catIdX, floatIdY))
+						getHistogramDataFromVars(catIdX, metricIdY))
 					// create new stream from each category
 					var catBuckets = []
-					for (var m=0; m<vars[catIdX][2].length; m++)
+					for (var m=0; m<vars[catIdX].dictionary.length; m++)
 						catBuckets.push([])
-					for (var m=0; m<data[floatIdY].length; m++)
-						catBuckets[data[catIdX][m]].push(data[floatIdY][m])
-					for (var m=0; m<vars[catIdX][2].length; m++)
+					for (var m=0; m<data[metricIdY].length; m++)
+						catBuckets[data[catIdX][m]].push(data[metricIdY][m])
+					for (var m=0; m<vars[catIdX].dictionary.length; m++)
 						drawKDE(svg, x, y, w, h, catBuckets[m])
 				} else { // scatterplot
-					floatIdX = nextFloat(floatIdX)
-					console.assert(floatIdX !== -1)
+					metricIdX = nextMetric(metricIdX)
+					console.assert(metricIdX !== -1)
 					w = wGlobal / vars.length
-					drawScatterplotFormat(svg, x, y, w, h, data[floatIdX], data[floatIdY])
+					drawScatterplotFormat(svg, x, y, w, h, data[metricIdX], data[metricIdY])
 				}
 			}
 			x += w + (wGlobal*marginToTotal/(vars.length-1))
 		}
 		x = xGlobal
 		y += h + (hGlobal*marginToTotal/(vars.length-1))
-		floatIdX = undefined
+		metricIdX = undefined
 		catIdX = undefined
 	}
 }
 
-function nextFloat(current) {
+function nextMetric(current) {
 	return next(current, true)
 }
 
@@ -202,14 +262,14 @@ function nextCat(current) {
 	return next(current, false)
 }
 
-function next(current, findFloat) {
+function next(current, findMetric) {
 	if (current == -1)
 		return -1
 	if (current === undefined || current === null)
 		current = -1
 	while (++current < vars.length) {
-		var typeIsFloat = vars[current][1] === "float"
-		if ((findFloat && typeIsFloat) || (!findFloat && !typeIsFloat))
+		var typeIsMetric = vars[current].dataType === "metric"
+		if ((findMetric && typeIsMetric) || (!findMetric && !typeIsMetric))
 			return current
 	}
 	return -1
@@ -222,7 +282,7 @@ function getTotalCardinalityFrom(cardinalityWidthCap) {
 	var vc = 0
 	while ((current = nextCat(current)) !== -1) {
 		vc++
-		var cardinality = vars[current][2].length
+		var cardinality = vars[current].dictionary.length
 		cc += (cardinality > cardinalityWidthCap
 			? cardinalityWidthCap
 			: cardinality)
@@ -232,20 +292,20 @@ function getTotalCardinalityFrom(cardinalityWidthCap) {
 	return [vc, cc, cc-cc0]
 }
 
-function getHistogramDataFromVars(catId, floatId) {
-	var result = new Array(vars[catId][2].length)
+function getHistogramDataFromVars(catId, metricId) {
+	var result = new Array(vars[catId].dictionary.length)
 	for (var i=0; i<result.length; i++)
 		result[i] = 0
 	for (var i=0; i<data[catId].length; i++)
-		result[data[catId][i]] += data[floatId][i]
+		result[data[catId][i]] += data[metricId][i]
 	return result
 }
 
 function getHeatmapDataFromVars(v1id, v2id) {
 	// init 2D map with count=0
-	var result = new Array(vars[v1id][2].length)
+	var result = new Array(vars[v1id].dictionary.length)
 	for (var i=0; i<result.length; i++) {
-		var inside = new Array(vars[v2id][2].length)
+		var inside = new Array(vars[v2id].dictionary.length)
 		for (var k=0; k<inside.length; k++) {
 			inside[k] = 0
 		}
@@ -258,18 +318,25 @@ function getHeatmapDataFromVars(v1id, v2id) {
 }
 
 function createTestData(numberOfRows) {
+	vars = [
+		{name:"v1", dataType:"metric", dictionary:[30, 50]},
+		{name:"v2", dataType:"ordinal", dictionary:[3,5,7,9]},
+		{name:"v3", dataType:"nominal", dictionary:["yes", "no", "kA"]},
+		{name:"v4", dataType:"ordinal", dictionary:["1-3", "3-10", "10-100"]},
+		{name:"v5", dataType:"metric", dictionary:[0, 100]}
+	]
+	
 	var data = []
 	for (var i=0; i<vars.length; i++) {
 		var row = []
 		for (var k=0; k<numberOfRows; k++) {
-			if (vars[i][1] === "float") {
-				var min = vars[i][2][0]
-				var max = vars[i][2][1]
+			if (vars[i].dataType === "metric") {
+				var min = vars[i].dictionary[0]
+				var max = vars[i].dictionary[1]
 				row.push(Math.random() * (max - min) + min)
 			} else { // get random category
 				// push id of category
-				row.push(Math.floor(Math.random()*vars[i][2].length))
-//				row.push(vars[i][2][Math.floor(Math.random()*vars[i][2].length)])
+				row.push(Math.floor(Math.random()*vars[i].dictionary.length))
 			}
 		}
 		data.push(row)
