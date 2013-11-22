@@ -8,6 +8,11 @@ var vars = [
 ]
 var data
 
+// json -> object with names
+// .. name: object with name, description and data
+// .. description: object with name, detail, dataType
+// .. data: array of strings (even if numbers inside)
+
 function interfaceInit() {
 	console.log("hi console :)")
 //	scatter()
@@ -23,11 +28,8 @@ function interfaceInit() {
 		.attr("height", height)
 	
 	definedGradients(svg)
-	
 	createGplomMatrix(svg, 30, 30, 500, 500, data)
-	
 	stream(svg)
-	
 }
 
 function stream(svg) {
