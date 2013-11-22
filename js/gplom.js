@@ -25,13 +25,21 @@ function draw() {
 		.attr("width", width)
 		.attr("height", height)
 	
+	svg
+		.append("rect")
+		.attr("x", 0).attr("y", 0)
+		.attr("width", "100%")
+		.attr("height", "100%")
+		.style("fill", "rgba(0,0,0,0.03)")
+	
 	definedGradients(svg)
-	createGplomMatrix(svg, 30, 30, 800, 500)
+	createGplomMatrix(svg, 0, 0, width, height)
 //	stream(svg)
 }
 
 function parseData(filename) {
 	vars = []
+	var purgeDictEntriesNotFoundInData = true
 	d3.json(filename, function(jsonData) {
 		var varId = 0
 		for (var key in jsonData) {
@@ -59,15 +67,25 @@ function parseData(filename) {
 			
 			if (hasDict) {
 				var newDict = []
-				for (var dictKey in desc.dictionary) {
-					newDict.push(desc.dictionary[dictKey])
-				}
+				var oldToNewDictTranslation = {}
+				if (!purgeDictEntriesNotFoundInData)
+					for (var dictKey in desc.dictionary) {
+						newDict.push(desc.dictionary[dictKey])
+					}
 				
 				for (var i=0; i<vars[varId].data.length; i++) {
 					var val = jsonDataKey.data[i]
 //					console.assert(typeof val === "string")
-					if (!isMetric)
+					if (!isMetric) {
 						console.assert(desc.dictionary.hasOwnProperty(val))
+					}
+
+					if (purgeDictEntriesNotFoundInData
+						&& oldToNewDictTranslation[val] === undefined
+						&& desc.dictionary[val] !== undefined) {
+							oldToNewDictTranslation[val] = "x" // check
+							newDict.push(desc.dictionary[val])
+					}
 					
 					for (var k=0; k<newDict.length; k++)
 						if (desc.dictionary[val] === newDict[k])
@@ -76,6 +94,7 @@ function parseData(filename) {
 					if (isMetric && vars[varId].data[i] === undefined)
 						vars[varId].data[i] = convertStrToNumber(val)
 				}
+				console.log(newDict)
 				vars[varId].dictionary = newDict
 			} else {
 				if (desc.dataType === "metric") {
@@ -85,13 +104,13 @@ function parseData(filename) {
 			}
 			varId++
 			
-			if (varId > 10)
+			if (varId > 25)
 				break
 			
 		}
 		console.log("parsing data done")
-		for (var i=0; i<vars.length; i++)
-			console.log(vars[i].dictionary)
+//		for (var i=0; i<vars.length; i++)
+//			console.log(vars[i].dictionary)
 		
 //		purgeDictEntriesNotFoundInData()
 //		
@@ -224,14 +243,6 @@ function definedGradients(svg) {
 		.append("stop")
 		.attr("stop-color", "rgba(0,0,0,0)")
 		.attr("offset", "100%")
-		
-		
-	svg
-		.append("rect")
-		.attr("x", 30).attr("y", 30)
-		.attr("width", 500)
-		.attr("height", 500)
-		.style("fill", "rgba(0,0,0,0.01)")
 }
 
 function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
@@ -241,8 +252,10 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 	var numberOfCatVars = vccc[0]
 	var totalCardinality = vccc[1]
 	var totalCardinalityMinusFirst = vccc[2]
-	var barWidth = wGlobal*(1-marginToTotal)/(vars.length-1)*numberOfCatVars/totalCardinality
-	var barHeight = hGlobal*(1-marginToTotal)/(vars.length-1)*(numberOfCatVars-1)/totalCardinalityMinusFirst
+	var barWidth = wGlobal*(1-marginToTotal)/(vars.length-1)
+//		*numberOfCatVars/totalCardinality
+	var barHeight = hGlobal*(1-marginToTotal)/(vars.length-1)
+//		*(numberOfCatVars-1)/totalCardinalityMinusFirst
 	
 	var x = xGlobal, y = yGlobal
 	// on the y-axis, we start with cat no 2
@@ -251,23 +264,23 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 	// row iteration (y-axis)
 	for (var i=0; i<vars.length-1; i++) {
 		catIdY = nextCat(catIdY)
-		var h
+		var h = barHeight
 		if (catIdY !== -1) { // heatmaps
-			h = vars[catIdY].dictionary.length * barHeight
+//			h = vars[catIdY].dictionary.length * barHeight
 		} else {
-			h = hGlobal / vars.length
+//			h = wGlobal*(1-marginToTotal)/vars.length
 			metricIdY = nextMetric(metricIdY)
 			console.assert(metricIdY !== -1)
 		}
 		// column iteration (x-axis)
 		for (var k=0; k<i+1; k++) {
 			catIdX = nextCat(catIdX)
-			var w
+			var w = barWidth
 			if (catIdX !== -1) {
 				var cardinality = vars[catIdX].dictionary.length
-				w = (cardinality > cardinalityWidthCap
-					? cardinalityWidthCap
-					: cardinality) * barWidth
+//				w = (cardinality > cardinalityWidthCap
+//					? cardinalityWidthCap
+//					: cardinality) * barWidth
 			}
 			if (catIdY !== -1) { // heatmap
 				console.assert(catIdX !== -1 && catIdX !== catIdY)
@@ -465,7 +478,7 @@ function drawHeatmap(svg, x, y, w, h, input) {
 	var hh = h/input[0].length
 	for (var i=0; i<input.length; i++) {
 		for (var k=0; k<innerLength; k++) {
-			var color = Math.round(input[i][k]/max*255)
+			var color = 255-Math.round(input[i][k]/max*255)
 			svg
 				.append("rect")
 				.attr("x", x+i*ww).attr("y", y+(h-(k+1)*hh))
