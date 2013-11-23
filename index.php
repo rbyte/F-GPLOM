@@ -12,8 +12,7 @@
 </head>
 
 <body onload="interfaceInit()">
-	<div id="viz"></div>
-	<div id="delta"></div>
+	<div id="vNames"></div>
 	
 </body>
 </html>

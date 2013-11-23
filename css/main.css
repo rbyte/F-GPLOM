@@ -1,3 +1,27 @@
 svg {
-	margin: 10px;
+	margin: 10px 10px 0 10px;
+	float: left;
 }
+#hNames div {
+	float: left;
+	font-size: 10px;
+	font-family: sans-serif;
+	text-align: center;
+}
+#vNames p {
+	/*width: 30px;*/
+	font-size: 10px;
+	font-family: sans-serif;
+	text-align: center;
+	transform: rotate(-90deg);
+}
+/*#vNames div p {*/
+	/*width: 30px;*/
+	
+/*}*/
+#vNames {
+	/*float: left;*/
+	/*width: 155px;*/
+	text-align: right;
+}
+

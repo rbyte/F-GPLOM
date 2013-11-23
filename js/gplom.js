@@ -10,12 +10,20 @@ function interfaceInit() {
 
 function main() {
 	parseData("data/SHIP_2012_D_S2_20121129.json")
-	
-//	var bla = {arr:[1,2,3,4]}
-//	bla.arr.splice(2,1)
-//	console.log(bla.arr)
-	
 //	createTestData(100)
+}
+
+function flowText(svg, x, y, w, h, text) {
+	// does not work. if I put the same svg block into the html, it works. do not know why.
+	var switchObj = svg.append("switch")
+	switchObj
+		.append("foreignObject")
+//		.attr("x", x).attr("y", y)
+		.attr("requiredFeatures", "http://www.w3.org/TR/SVG11/feature#Extensibility")
+		.attr("width", w).attr("height", h)
+		.append("p")
+		.attr("xmlns", "http://www.w3.org/1999/xhtml")
+		.text("Text goes here ok so i have along line of text and i expect it to be wrapped now")
 }
 
 function draw() {
@@ -25,15 +33,16 @@ function draw() {
 		.attr("width", width)
 		.attr("height", height)
 	
-	svg
-		.append("rect")
-		.attr("x", 0).attr("y", 0)
-		.attr("width", "100%")
-		.attr("height", "100%")
-		.style("fill", "rgba(0,0,0,0.03)")
+//	svg
+//		.append("rect")
+//		.attr("x", 0).attr("y", 0)
+//		.attr("width", "100%")
+//		.attr("height", "100%")
+//		.style("fill", "rgba(0,0,0,0.03)")
 	
 	definedGradients(svg)
 	createGplomMatrix(svg, 0, 0, width, height)
+	
 //	stream(svg)
 }
 
@@ -55,6 +64,10 @@ function parseData(filename) {
 			console.assert(desc.hasOwnProperty("detail"))
 			var isMetric = desc.dataType === "metric"
 			var hasDict = desc.hasOwnProperty("dictionary")
+			
+			// filter
+			if (key === "zz_nr")
+				continue
 			
 			if (isMetric || hasDict) {
 				vars.push(desc)
@@ -104,21 +117,13 @@ function parseData(filename) {
 			}
 			varId++
 			
-			if (varId > 10)
+			if (varId > 5)
 				break
 			
 		}
 		console.log("parsing data done")
 //		for (var i=0; i<vars.length; i++)
 //			console.log(vars[i].dictionary)
-		
-//		purgeDictEntriesNotFoundInData()
-//		
-//		for (var i=0; i<vars.length; i++)
-//			console.log(vars[i].dictionary)
-//		
-//		for (var i=0; i<vars.length; i++)
-//			console.log(vars[i].data)
 		
 		draw()
 		console.log("done!")
@@ -132,30 +137,6 @@ function convertStrToNumber(val) {
 	if (isNaN(number) || number === undefined)
 		console.log("could not parse: "+val)
 	return number
-}
-
-function purgeDictEntriesNotFoundInData() {
-	for (var i=0; i<vars.length; i++) {
-		var isMetric = vars[i].dataType === "metric"
-		if (vars[i].hasOwnProperty("dictionary") && !isMetric)
-			for (var k=0; k<vars[i].dictionary.length; k++) {
-				var foundEntry = false
-				for (var m=0; m<vars[i].data.length; m++) {
-					var dictId = vars[i].data[m]
-					if (isMetric) {
-						if (typeof dictId !== "string")
-							continue
-						dictId = parseInt(dictId)
-					}
-					if (dictId === k) {
-						foundEntry = true
-						break
-					}
-				}
-				if (!foundEntry)
-					vars[i].dictionary.splice(k, 1)
-			}
-	}
 }
 
 function stream(svg) {
@@ -252,14 +233,21 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 	var numberOfCatVars = vccc[0]
 	var totalCardinality = vccc[1]
 	var totalCardinalityMinusFirst = vccc[2]
+	var wMargin = wGlobal*marginToTotal/(vars.length-1)
+	
 	var barWidth = wGlobal*(1-marginToTotal)/(vars.length-1)
 //		*numberOfCatVars/totalCardinality
+	var hMargin = hGlobal*marginToTotal/(vars.length-1)
 	var barHeight = hGlobal*(1-marginToTotal)/(vars.length-1)
 //		*(numberOfCatVars-1)/totalCardinalityMinusFirst
 	
 	var x = xGlobal, y = yGlobal
 	// on the y-axis, we start with cat no 2
 	var metricIdX, catIdX, metricIdY, catIdY = nextCat()
+	var hTextDiv = d3.select("body").append("div").attr("id", "hNames")
+	var vTextDiv = d3.select("#vNames")
+	var vStyle = "min-width: "+barWidth+"px; max-width: "+barWidth+"px; padding-right: "+wMargin+"px;"
+	var hStyle = "min-height: "+barHeight+"px; max-height: "+barHeight+"px; padding-bottom: "+hMargin+"px;"
 	
 	// row iteration (y-axis)
 	for (var i=0; i<vars.length-1; i++) {
@@ -305,18 +293,38 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 				} else { // scatterplot
 					metricIdX = nextMetric(metricIdX)
 					console.assert(metricIdX !== -1)
-					w = wGlobal / vars.length
+					
 //					if (false)
 					drawScatterplotFormat(svg.append("g"), x, y, w, h, vars[metricIdX].data, vars[metricIdY].data)
 				}
 			}
+			if (k === i) {
+				hTextDiv.append("div").attr("style", vStyle).append("p").text(vars[
+					(catIdX === undefined || catIdX < 0 ? metricIdX : catIdX)
+				].name)
+			}
 			x += w + (wGlobal*marginToTotal/(vars.length-1))
 		}
+		vTextDiv.append("p").attr("style", hStyle).text(vars[
+			(catIdY === undefined || catIdY < 0 ? metricIdY : catIdY)
+		].name)
 		x = xGlobal
 		y += h + (hGlobal*marginToTotal/(vars.length-1))
 		metricIdX = undefined
 		catIdX = undefined
 	}
+	
+//	var total = 0
+//	for (var i=0; i<vars.length; i++)
+//		if (vars[i].dataType === "nominal" || vars[i].dataType === "ordinal") {
+//			hTextDiv.append("div").attr("style", style).append("p").text(vars[i].name)
+//			total++
+//		}
+//	for (var i=0; i<vars.length && total<vars.length-1; i++)
+//		if (vars[i].dataType === "metric") {
+//			hTextDiv.append("div").attr("style", style).append("p").text(vars[i].name)
+//			total++
+//		}
 }
 
 function nextMetric(current) {
@@ -563,6 +571,15 @@ function scatter() {
 }
 
 function drawScatterplotFormat(svg, x, y, w, h, vX, vY) {
+	svg
+		.append("rect")
+		.attr("x", x).attr("y", y)
+		.attr("width", w)
+		.attr("height", h)
+		.style("fill", "transparent")
+		.style("stroke", "rgba(0,0,0,0.4)")
+		.style("stroke-width", "1")
+	
 	var maxPointsDisplayed = 50
 	console.assert(vX.length === vY.length)
 	
