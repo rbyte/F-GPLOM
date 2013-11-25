@@ -12,7 +12,25 @@
 </head>
 
 <body onload="interfaceInit()">
-	<div id="vNames"></div>
+	
+	<table id="container">
+		<tr>
+			<td>
+				<table id="yNames">
+				</table>
+			</td>
+			<td>
+				<svg id="viz"></svg>
+			</td>
+		</tr>
+		<tr>
+			<td></td>
+			<td>
+				<table><tr id="xNames">
+				</tr></table>
+			</td>
+		</tr>
+	</table>
 	
 </body>
 </html>

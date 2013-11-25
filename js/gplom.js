@@ -34,7 +34,7 @@ function main() {
 		
 //		document.write(JSON.stringify(vars))
 		
-		var numberOfVarsToDraw = 6
+		var numberOfVarsToDraw = 10
 		if (vars.length > numberOfVarsToDraw)
 			vars.splice(numberOfVarsToDraw, vars.length-numberOfVarsToDraw)
 		draw()
@@ -49,18 +49,19 @@ function main() {
 }
 
 function draw() {
-	var width = 1100, height = 850
+	var width = 1100, height = 830
 	
-	var svg = d3.select("body").append("svg")
+	var svg = d3.select("#viz")
 		.attr("width", width)
 		.attr("height", height)
 	
-//	svg
-//		.append("rect")
-//		.attr("x", 0).attr("y", 0)
-//		.attr("width", "100%")
-//		.attr("height", "100%")
-//		.style("fill", "rgba(0,0,0,0.03)")
+	svg
+		.append("rect")
+		.attr("x", 0).attr("y", 0)
+		.attr("width", "100%")
+		.attr("height", "100%")
+		.attr("fill", "rgb(0,0,0)")
+		.attr("fill-opacity", "0.03")
 	
 	definedGradients(svg)
 	createGplomMatrix(svg, 0, 0, width, height)
@@ -210,7 +211,7 @@ function stream(svg) {
 		.data(layers0)
 	  .enter().append("path")
 		.attr("d", area)
-		.style("fill", function() { return color(Math.random()) })
+		.attr("fill", function() { return color(Math.random()) })
 }
 
 function kernelDensityEstimator(kernel, x) {
@@ -228,7 +229,9 @@ function epanechnikovKernel(scale) {
 }
 
 function definedGradients(svg) {
-	var lgrad = svg.append("linearGradient")
+	var defs = svg.append("defs")
+	
+	var lgrad = defs.append("linearGradient")
 		.attr("id", "lg1")
 		.attr("x1", "0%")
 		.attr("y1", "0%")
@@ -237,15 +240,15 @@ function definedGradients(svg) {
 	
 	lgrad
 		.append("stop")
-		.attr("stop-color", "rgba(200,200,200,1)")
+		.attr("stop-color", "rgb(200,200,200)")
 		.attr("offset", "0%")
 	
 	lgrad
 		.append("stop")
-		.attr("stop-color", "rgba(240,240,240,1)")
+		.attr("stop-color", "rgb(240,240,240)")
 		.attr("offset", "100%")
 		
-	var rgrad = svg.append("radialGradient")
+	var rgrad = defs.append("radialGradient")
 		.attr("id", "g1")
 		.attr("cx", "50%")
 		.attr("cy", "50%")
@@ -253,37 +256,41 @@ function definedGradients(svg) {
 	
 	rgrad
 		.append("stop")
-		.attr("stop-color", "rgba(0,0,0,0.7)")
+		.attr("stop-color", "rgb(0,0,0)")
+		.attr("stop-opacity", "0.7")
 		.attr("offset", "0%")
 	
 	rgrad
 		.append("stop")
-		.attr("stop-color", "rgba(0,0,0,0)")
+		.attr("stop-color", "rgb(0,0,0)")
+		.attr("stop-opacity", "0")
 		.attr("offset", "100%")
 }
 
 function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
+	wGlobal -= 5
+	hGlobal -= 5
 	var marginToTotal = 0.2
 	var cardinalityWidthCap = 8
 	var vccc = getTotalCardinalityFrom(cardinalityWidthCap)
-	var numberOfCatVars = vccc[0]
-	var totalCardinality = vccc[1]
-	var totalCardinalityMinusFirst = vccc[2]
-	var wMargin = wGlobal*marginToTotal/(vars.length-1)
+//	var numberOfCatVars = vccc[0]
+//	var totalCardinality = vccc[1]
+//	var totalCardinalityMinusFirst = vccc[2]
+	var wMargin = wGlobal*marginToTotal/(vars.length-2)
+	var hMargin = hGlobal*marginToTotal/(vars.length-2)
 	
 	var barWidth = wGlobal*(1-marginToTotal)/(vars.length-1)
 //		*numberOfCatVars/totalCardinality
-	var hMargin = hGlobal*marginToTotal/(vars.length-1)
 	var barHeight = hGlobal*(1-marginToTotal)/(vars.length-1)
 //		*(numberOfCatVars-1)/totalCardinalityMinusFirst
 	
 	var x = xGlobal, y = yGlobal
 	// on the y-axis, we start with cat no 2
 	var metricIdX, catIdX, metricIdY, catIdY = nextCat()
-	var hTextDiv = d3.select("body").append("div").attr("id", "hNames")
-	var vTextDiv = d3.select("#vNames")
-	var vStyle = "min-width: "+barWidth+"px; max-width: "+barWidth+"px; padding-right: "+wMargin+"px;"
-	var hStyle = "min-height: "+barHeight+"px; max-height: "+barHeight+"px; padding-bottom: "+hMargin+"px;"
+	var xTextDiv = d3.select("#xNames")
+	var yTextDiv = d3.select("#yNames")
+	var xStyle = "width: "+round(wGlobal/(vars.length-1))+"px"
+	var yStyle = "height: "+round(hGlobal/(vars.length-1))+"px"
 	
 	// row iteration (y-axis)
 	for (var i=0; i<vars.length-1; i++) {
@@ -335,32 +342,20 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 				}
 			}
 			if (k === i) {
-				hTextDiv.append("div").attr("style", vStyle).append("p").text(vars[
+				xTextDiv.append("td").attr("style", xStyle).text(vars[
 					(catIdX === undefined || catIdX < 0 ? metricIdX : catIdX)
 				].name)
 			}
-			x += w + (wGlobal*marginToTotal/(vars.length-1))
+			x += w + wMargin
 		}
-		vTextDiv.append("p").attr("style", hStyle).text(vars[
+		yTextDiv.append("tr").append("td").attr("style", yStyle).text(vars[
 			(catIdY === undefined || catIdY < 0 ? metricIdY : catIdY)
 		].name)
 		x = xGlobal
-		y += h + (hGlobal*marginToTotal/(vars.length-1))
+		y += h + hMargin
 		metricIdX = undefined
 		catIdX = undefined
 	}
-	
-//	var total = 0
-//	for (var i=0; i<vars.length; i++)
-//		if (vars[i].dataType === "nominal" || vars[i].dataType === "ordinal") {
-//			hTextDiv.append("div").attr("style", style).append("p").text(vars[i].name)
-//			total++
-//		}
-//	for (var i=0; i<vars.length && total<vars.length-1; i++)
-//		if (vars[i].dataType === "metric") {
-//			hTextDiv.append("div").attr("style", style).append("p").text(vars[i].name)
-//			total++
-//		}
 }
 
 function nextMetric(current) {
@@ -472,9 +467,9 @@ function drawKDE(svg, x, y, w, h, input) {
 		.datum(kde(input))
 		.attr("class", "line")
 		.attr("d", line)
-		.style("fill", "transparent")
-		.style("stroke", "gray")
-		.style("stroke-width", "3")
+		.attr("fill", "transparent")
+		.attr("stroke", "gray")
+		.attr("stroke-width", "3")
 }
 
 function getMinMax(input) {
@@ -490,7 +485,7 @@ function getMinMax(input) {
 }
 
 function heatmapTest() {
-	var svg = d3.select("body").append("svg")
+	var svg = d3.select("#viz")
 		.attr("width", 960)
 		.attr("height", 500)
 
@@ -523,18 +518,24 @@ function drawHeatmap(svg, x, y, w, h, input) {
 	for (var i=0; i<input.length; i++) {
 		for (var k=0; k<innerLength; k++) {
 			var color = 255-Math.round(input[i][k]/max*255)
+			if (color !== 255)
 			svg
 				.append("rect")
-				.attr("x", x+i*ww).attr("y", y+(h-(k+1)*hh))
-				.attr("width", ww)
-				.attr("height", hh)
-				.style("fill", "rgba("+color+","+color+","+color+",1)")
+				.attr("x", round(x+i*ww))
+				.attr("y", round(y+(h-(k+1)*hh)))
+				.attr("width", round(ww))
+				.attr("height", round(hh))
+				.attr("fill", "rgb("+color+","+color+","+color+")")
 		}
 	}
 }
 
+function round(number) {
+	return Number(number.toFixed(1))
+}
+
 function histTest() {
-	var svg = d3.select("body").append("svg")
+	var svg = d3.select("#viz")
 		.attr("width", 960)
 		.attr("height", 500)
 	
@@ -557,8 +558,8 @@ function drawHistogram(svg, x, y, w, h, input) {
 		.append("line")
 		.attr("x1", x).attr("y1", y+h)
 		.attr("x2", x+w).attr("y2", y+h)
-		.style("stroke", "gray")
-		.style("stroke-width", "3")
+		.attr("stroke", "gray")
+		.attr("stroke-width", "3")
 	
 	var ww = 1/input.length*w
 	for (var i=0; i<input.length; i++) {
@@ -567,17 +568,18 @@ function drawHistogram(svg, x, y, w, h, input) {
 		var yy = y+(h-barHeight)
 		svg
 			.append("rect")
-			.attr("x", xx).attr("y", yy)
-			.attr("width", ww)
-			.attr("height", barHeight)
-			.style("fill", "url(#lg1)")
+			.attr("x", round(xx))
+			.attr("y", round(yy))
+			.attr("width", round(ww))
+			.attr("height", round(barHeight))
+			.attr("fill", "url(#lg1)")
 		
 		svg
 			.append("line")
 			.attr("x1", xx).attr("y1", yy)
 			.attr("x2", xx+ww).attr("y2", yy)
-			.style("stroke", "black")
-			.style("stroke-width", "1")
+			.attr("stroke", "black")
+			.attr("stroke-width", "1")
 	}
 	
 	var numberOfRulers = 3
@@ -585,15 +587,16 @@ function drawHistogram(svg, x, y, w, h, input) {
 		var yy = y+h-i/(numberOfRulers+1)*h
 		svg
 			.append("line")
-			.attr("x1", x).attr("y1", yy)
-			.attr("x2", x+w).attr("y2", yy)
-			.style("stroke", "rgba(255,255,255,0.5)")
-			.style("stroke-width", "1")
+			.attr("x1", round(x)).attr("y1", round(yy))
+			.attr("x2", round(x+w)).attr("y2", round(yy))
+			.attr("stroke", "rgb(255,255,255)")
+			.attr("stroke-opacity", "0.5")
+			.attr("stroke-width", "1")
 	}
 }
 
 function scatter() {
-	var svg = d3.select("body").append("svg")
+	var svg = d3.select("#viz")
 		.attr("width", 960)
 		.attr("height", 500)
 	
@@ -612,9 +615,11 @@ function drawScatterplotFormat(svg, x, y, w, h, vX, vY) {
 		.attr("x", x).attr("y", y)
 		.attr("width", w)
 		.attr("height", h)
-		.style("fill", "transparent")
-		.style("stroke", "rgba(0,0,0,0.4)")
-		.style("stroke-width", "1")
+		.attr("fill", "rgb(0,0,0)")
+		.attr("fill-opacity", "0")
+		.attr("stroke", "rgb(0,0,0)")
+		.attr("stroke-opacity", "0.4")
+		.attr("stroke-width", "1")
 	
 	var maxPointsDisplayed = 50
 	console.assert(vX.length === vY.length)
@@ -646,10 +651,10 @@ function drawScatterplotFormat(svg, x, y, w, h, vX, vY) {
 		var idx = minLength > maxPointsDisplayed ? randomId[i] : i
 		svg
 		.append("circle")
-		.style("fill", "url(#g1)")
+		.attr("fill", "url(#g1)")
 		.attr("r", 4)
-		.attr("cx", x+w*((vX[idx]-Xmin)/(Xmax-Xmin)))
-		.attr("cy", y+h*(1-(vY[idx]-Ymin)/(Ymax-Ymin)))
+		.attr("cx", round(x+w*((vX[idx]-Xmin)/(Xmax-Xmin))))
+		.attr("cy", round(y+h*(1-(vY[idx]-Ymin)/(Ymax-Ymin))))
 	}
 }
 

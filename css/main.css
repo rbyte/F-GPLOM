@@ -1,27 +1,21 @@
+body {
+	margin: 0;
+	padding: 0;
+}
 svg {
-	margin: 10px 10px 0 10px;
-	float: left;
+	margin: 10px;
 }
-#hNames div {
-	float: left;
+table, tr, td {
+	padding: 0;
+	margin: 0;
+	/*border: 1px solid black;*/
+	border-collapse: collapse;
+}
+#xNames, #yNames {
 	font-size: 10px;
 	font-family: sans-serif;
 	text-align: center;
 }
-#vNames p {
-	/*width: 30px;*/
-	font-size: 10px;
-	font-family: sans-serif;
-	text-align: center;
+#yNames td {
 	transform: rotate(-90deg);
 }
-/*#vNames div p {*/
-	/*width: 30px;*/
-	
-/*}*/
-#vNames {
-	/*float: left;*/
-	/*width: 155px;*/
-	text-align: right;
-}
-
