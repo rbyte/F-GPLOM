@@ -9,21 +9,43 @@ function interfaceInit() {
 }
 
 function main() {
-	parseData("data/SHIP_2012_D_S2_20121129.json")
+	var afterParsingDo = function() {
+		console.log("parsing data done")
+		var dataTypesCount = []
+		var dataTypes = ["ordinal", "metric", "dichotomous", "nominal"]
+		
+//		for (var k=0; k<dataTypes.length; k++)
+//			dataTypesCount.push(0)
+//		
+//		for (var i=0; i<vars.length; i++)
+//			for (var k=0; k<dataTypes.length; k++)
+//				if (vars[i].dataType === dataTypes[k]) {
+//					dataTypesCount[k]++
+//					break
+//				}
+//		
+//		for (var k=0; k<dataTypes.length; k++) {
+//			console.log(dataTypes[k]+": "+dataTypesCount[k])
+//			for (var i=0; i<vars.length; i++)
+//				if (vars[i].dataType === dataTypes[k]) {
+//					console.log("\t"+vars[i].name+", "+vars[i].data.length+", "+vars[i].detail+", "+vars[i].dictionary)
+//				}
+//		}
+		
+//		document.write(JSON.stringify(vars))
+		
+		var numberOfVarsToDraw = 6
+		if (vars.length > numberOfVarsToDraw)
+			vars.splice(numberOfVarsToDraw, vars.length-numberOfVarsToDraw)
+		draw()
+		
+		console.log("done!")
+	}
+	
+//	parseData("data/SHIP_2012_D_S2_20121129.json", afterParsingDo)
+	parseDataFast("data/SHIP_2012_D_S2_20121129_improved.json", afterParsingDo)
+	
 //	createTestData(100)
-}
-
-function flowText(svg, x, y, w, h, text) {
-	// does not work. if I put the same svg block into the html, it works. do not know why.
-	var switchObj = svg.append("switch")
-	switchObj
-		.append("foreignObject")
-//		.attr("x", x).attr("y", y)
-		.attr("requiredFeatures", "http://www.w3.org/TR/SVG11/feature#Extensibility")
-		.attr("width", w).attr("height", h)
-		.append("p")
-		.attr("xmlns", "http://www.w3.org/1999/xhtml")
-		.text("Text goes here ok so i have along line of text and i expect it to be wrapped now")
 }
 
 function draw() {
@@ -46,7 +68,7 @@ function draw() {
 //	stream(svg)
 }
 
-function parseData(filename) {
+function parseData(filename, callback) {
 	vars = []
 	var purgeDictEntriesNotFoundInData = true
 	d3.json(filename, function(jsonData) {
@@ -59,7 +81,6 @@ function parseData(filename) {
 			
 			var desc = jsonDataKey.description
 			console.assert(desc.hasOwnProperty("name"))
-				// ordinal, metric, dichotomous, nominal
 			console.assert(desc.hasOwnProperty("dataType"))
 			console.assert(desc.hasOwnProperty("detail"))
 			var isMetric = desc.dataType === "metric"
@@ -117,17 +138,32 @@ function parseData(filename) {
 			}
 			varId++
 			
-			if (varId > 5)
+			if (varId > 100)
 				break
 			
 		}
-		console.log("parsing data done")
-//		for (var i=0; i<vars.length; i++)
-//			console.log(vars[i].dictionary)
-		
-		draw()
-		console.log("done!")
+		callback()
 	})
+}
+
+function parseDataFast(filename, callback) {
+	d3.json(filename, function(jsonData) {
+		vars = jsonData
+		callback()
+	})
+}
+
+function flowText(svg, x, y, w, h, text) {
+	// does not work. if I put the same svg block into the html, it works. do not know why.
+	var switchObj = svg.append("switch")
+	switchObj
+		.append("foreignObject")
+//		.attr("x", x).attr("y", y)
+		.attr("requiredFeatures", "http://www.w3.org/TR/SVG11/feature#Extensibility")
+		.attr("width", w).attr("height", h)
+		.append("p")
+		.attr("xmlns", "http://www.w3.org/1999/xhtml")
+		.text("Text goes here ok so i have along line of text and i expect it to be wrapped now")
 }
 
 function convertStrToNumber(val) {
