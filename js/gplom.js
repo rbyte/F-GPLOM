@@ -50,18 +50,19 @@ function main() {
 
 function draw() {
 	var width = 1100, height = 830
+//	var width = 4000, height = 4000
 	
 	var svg = d3.select("#viz")
 		.attr("width", width)
 		.attr("height", height)
 	
-	svg
-		.append("rect")
-		.attr("x", 0).attr("y", 0)
-		.attr("width", "100%")
-		.attr("height", "100%")
-		.attr("fill", "rgb(0,0,0)")
-		.attr("fill-opacity", "0.03")
+//	svg
+//		.append("rect")
+//		.attr("x", 0).attr("y", 0)
+//		.attr("width", "100%")
+//		.attr("height", "100%")
+//		.attr("fill", "rgb(0,0,0)")
+//		.attr("fill-opacity", "0.03")
 	
 	definedGradients(svg)
 	createGplomMatrix(svg, 0, 0, width, height)
@@ -138,10 +139,6 @@ function parseData(filename, callback) {
 				}
 			}
 			varId++
-			
-			if (varId > 100)
-				break
-			
 		}
 		callback()
 	})
