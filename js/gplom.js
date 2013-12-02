@@ -1,4 +1,6 @@
 var vars
+var filter = []
+var svg
 
 function interfaceInit() {
 	console.log("hi console :)")
@@ -52,20 +54,21 @@ function draw() {
 	var width = 1100, height = 830
 //	var width = 4000, height = 4000
 	
-	var svg = d3.select("#viz")
+	svg = d3.select("#viz")
 		.attr("width", width)
 		.attr("height", height)
 	
-//	svg
-//		.append("rect")
-//		.attr("x", 0).attr("y", 0)
-//		.attr("width", "100%")
-//		.attr("height", "100%")
-//		.attr("fill", "rgb(0,0,0)")
-//		.attr("fill-opacity", "0.03")
+	if (false) svg
+		.append("rect")
+		.attr("x", 0).attr("y", 0)
+		.attr("width", "100%")
+		.attr("height", "100%")
+		.attr("fill", "rgb(0,0,0)")
+		.attr("fill-opacity", "0.03")
 	
-	definedGradients(svg)
-	createGplomMatrix(svg, 0, 0, width, height)
+	defineGradients(svg)
+	var padding = 20
+	createGplomMatrix(svg, padding, padding, width-2*padding, height-2*padding)
 	
 //	stream(svg)
 }
@@ -151,81 +154,7 @@ function parseDataFast(filename, callback) {
 	})
 }
 
-function flowText(svg, x, y, w, h, text) {
-	// does not work. if I put the same svg block into the html, it works. do not know why.
-	var switchObj = svg.append("switch")
-	switchObj
-		.append("foreignObject")
-//		.attr("x", x).attr("y", y)
-		.attr("requiredFeatures", "http://www.w3.org/TR/SVG11/feature#Extensibility")
-		.attr("width", w).attr("height", h)
-		.append("p")
-		.attr("xmlns", "http://www.w3.org/1999/xhtml")
-		.text("Text goes here ok so i have along line of text and i expect it to be wrapped now")
-}
-
-function convertStrToNumber(val) {
-	var number = parseInt(val)
-	if (isNaN(number))
-		number = parseFloat(val)
-	if (isNaN(number) || number === undefined)
-		console.log("could not parse: "+val)
-	return number
-}
-
-function stream(svg) {
-	var faithful1 = [1,2,3,4,5,6]
-	var faithful2 = [4,3,5,1,2,0]
-	var f1xy = faithful1.map(function(d, i) {
-		return {x: i, y: d}
-	})
-	var f2xy = faithful2.map(function(d, i) {
-		return {x: i, y: d}
-	})
-	
-	console.log([f1xy, f2xy])
-	var stack = d3.layout.stack().offset("wiggle"), // zero, wiggle, expand
-		layers0 = stack([f1xy, f2xy])
-		
-	
-	var x = d3.scale.linear()
-		.domain([0, 7])
-		.range([0, 500])
-
-	var y = d3.scale.linear()
-		.domain([0, 7])
-		.range([300, 0])
-
-	var color = d3.scale.linear()
-		.range(["#aad", "#556"])
-
-	var area = d3.svg.area()
-		.x(function(d) { return x(d.x) })
-		.y0(function(d) { return y(d.y0) })
-		.y1(function(d) { return y(d.y0 + d.y) })
-	
-	svg.selectAll("path")
-		.data(layers0)
-	  .enter().append("path")
-		.attr("d", area)
-		.attr("fill", function() { return color(Math.random()) })
-}
-
-function kernelDensityEstimator(kernel, x) {
-  return function(sample) {
-    return x.map(function(x) {
-      return [x, d3.mean(sample, function(v) { return kernel(x - v) })]
-    })
-  }
-}
-
-function epanechnikovKernel(scale) {
-  return function(u) {
-    return Math.abs(u /= scale) <= 1 ? .75 * (1 - u * u) / scale : 0
-  }
-}
-
-function definedGradients(svg) {
+function defineGradients(svg) {
 	var defs = svg.append("defs")
 	
 	var lgrad = defs.append("linearGradient")
@@ -263,6 +192,31 @@ function definedGradients(svg) {
 		.attr("stop-opacity", "0")
 		.attr("offset", "100%")
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 	wGlobal -= 5
@@ -318,9 +272,13 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 				if (catIdX !== -1) { // histogram
 					drawHistogram(svg.append("g"), x, y, w, h,
 						getHistogramDataFromVars(catIdX, metricIdY))
-					// create new stream from each category
-					if (false) {
 						
+					if (i === vars.length-2) {
+						drawFilterX(svg, x, y+h, w, w*0.1, catIdX)
+					}
+						
+					if (false) {
+					// create new stream from each category
 					var catBuckets = []
 					for (var m=0; m<vars[catIdX].dictionary.length; m++)
 						catBuckets.push([])
@@ -328,7 +286,6 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 						catBuckets[vars[catIdX].data[m]].push(vars[metricIdY].data[m])
 					for (var m=0; m<vars[catIdX].dictionary.length; m++)
 						drawKDE(svg.append("g"), x, y, w, h, catBuckets[m])
-						
 					}
 				} else { // scatterplot
 					metricIdX = nextMetric(metricIdX)
@@ -393,6 +350,119 @@ function getTotalCardinalityFrom(cardinalityWidthCap) {
 	return [vc, cc, cc-cc0]
 }
 
+function getFilterRangeFor(varId, aOrB) {
+	for (var i=0; i<filter.length; i++) {
+		if (filter[i].varId === varId)
+			return filter[i][aOrB]
+	}
+	return aOrB === "a" ? 0 : (vars[varId].dictionary.length-1)
+}
+
+function setFilterRangeFor(varId, aOrB, val) {
+	for (var i=0; i<filter.length; i++) {
+		if (filter[i].varId === varId) {
+			filter[i][aOrB] = val
+			if (filter[i].a === 0 && filter[i].b === vars[varId].dictionary.length-1)
+				filter.splice(i, 1)
+			return
+		}
+	}
+	if ((aOrB === "a" && val !== 0) || (aOrB === "b" && val !== vars[varId].dictionary.length-1))
+		filter.push({
+			varId: varId,
+			a: aOrB === "a" ? val : 0,
+			b: aOrB === "b" ? val : vars[varId].dictionary.length-1
+		})
+}
+
+function drawFilterX(svg, x, y, w, h, varId) {
+	var color = 100
+	
+//	function pathFor(x,y,w,h)
+	var isDragged = false
+	var ondrag = d3.behavior.drag()
+		.on("drag", function() {
+			// if a === b then the sliders are one width apart!
+			// thus, bSlider pos is actually at b+1!
+			var mouseX = d3.event.x
+			var d3obj = d3.select(this)
+			var x = parseFloat(d3obj.attr("_x"))
+			var y = parseFloat(d3obj.attr("_y"))
+			var w = parseFloat(d3obj.attr("_w"))
+			var h = parseFloat(d3obj.attr("_h"))
+			var varId = parseInt(d3obj.attr("_varId"))
+			var aOrB = d3obj.attr("aOrB")
+			var numberOfCat = vars[varId].dictionary.length
+			var barWidth = w/numberOfCat
+			var id = getFilterRangeFor(varId, aOrB)
+			var other = getFilterRangeFor(varId, aOrB === "a" ? "b" : "a")
+			var posX = x+(id+(aOrB === "b" ? 1 : 0))*barWidth // + (aOrB === "b" ? 1 : 0)
+			var dxr = (mouseX-posX)/barWidth
+	//		console.log(id+", "+dxr)
+			if (dxr >= 0.5 && ((aOrB === "a" && id < numberOfCat-1) || (aOrB === "b" && id < numberOfCat-1))) {
+				setFilterRangeFor(varId, aOrB, id+1)
+				d3obj.attr("transform", "translate("+(id+1+ (aOrB === "b" ? 1 : 0))*barWidth+", 0)")
+				// a must < b
+				if (aOrB === "a" && id+1 >= other) {
+					setFilterRangeFor(varId, "b", id+1)
+					d3.select("#fsxb"+varId).attr("transform", "translate("+(id+2)*barWidth+", 0)")
+				}
+			}
+			if (dxr <= -0.5 && ((aOrB === "a" && id > 0) || (aOrB === "b" && id > 0))) {
+				setFilterRangeFor(varId, aOrB, id-1)
+				d3obj.attr("transform", "translate("+(id-1+ (aOrB === "b" ? 1 : 0))*barWidth+", 0)")
+				// a must < b
+				if (aOrB === "b" && id-1 <= other) {
+					setFilterRangeFor(varId, "a", id-1)
+					d3.select("#fsxa"+varId).attr("transform", "translate("+(id-1)*barWidth+", 0)")
+				}
+			}
+		})
+		.on("dragstart", function() {
+			isDragged = true
+			d3.select(this).attr("fill", "red")
+		})
+		.on("dragend", function() {
+			isDragged = false
+			d3.select(this).attr("fill", "rgb("+color+","+color+","+color+")")
+		})
+	
+	var fss = new Array(2)
+	fss[0] = svg
+		.append("path")
+		.attr("class", "filterSlider")
+		.attr("id", "fsxa"+varId)
+		.attr("aOrB", "a")
+		.attr("d", "M"+x+","+y+" L"+x+","+(y+h)+" L"+(x - h)+","+(y+h)+" Z")
+//		.call(d3.behavior.drag().on("drag", ondrag))
+	
+	fss[1] = svg.append("path")
+		.attr("class", "filterSlider")
+		.attr("id", "fsxb"+varId)
+		.attr("aOrB", "b")
+		.attr("d", "M"+x+","+y+" L"+x+","+(y+h)+" L"+(x + h)+","+(y+h)+" Z")
+		.attr("transform", "translate("+w+", 0)")
+	
+	for (var i=0; i<fss.length; i++)
+		fss[i]
+		.attr("_x", x)
+		.attr("_y", y)
+		.attr("_w", w)
+		.attr("_h", h)
+		.attr("_varId", varId)
+		.attr("fill", "rgb("+color+","+color+","+color+")")
+		.on("mouseover", function() {
+			if (!isDragged)
+				d3.select(this).attr("fill", "red")
+		})
+		.on("mouseout", function() {
+			if (!isDragged)
+				d3.select(this).attr("fill", "rgb("+color+","+color+","+color+")")
+		})
+		.call(ondrag)
+	
+}
+
 function getHistogramDataFromVars(catId, metricId) {
 	var result = new Array(vars[catId].dictionary.length)
 	for (var i=0; i<result.length; i++)
@@ -420,31 +490,6 @@ function getHeatmapDataFromVars(v1id, v2id) {
 	return result
 }
 
-function createTestData(numberOfRows) {
-	vars = [
-		{name:"v1", dataType:"metric", dictionary:[30, 50], data:[]},
-		{name:"v2", dataType:"ordinal", dictionary:[3,5,7,9], data:[]},
-		{name:"v3", dataType:"nominal", dictionary:["yes", "no", "kA"], data:[]},
-		{name:"v4", dataType:"ordinal", dictionary:["1-3", "3-10", "10-100"], data:[]},
-		{name:"v5", dataType:"metric", dictionary:[0, 100], data:[]}
-	]
-	
-	for (var i=0; i<vars.length; i++) {
-		var row = []
-		for (var k=0; k<numberOfRows; k++) {
-			if (vars[i].dataType === "metric") {
-				var min = vars[i].dictionary[0]
-				var max = vars[i].dictionary[1]
-				row.push(Math.random() * (max - min) + min)
-			} else { // get random category
-				// push id of category
-				row.push(Math.floor(Math.random()*vars[i].dictionary.length))
-			}
-		}
-		vars[i].data = row
-	}
-}
-
 function drawKDE(svg, x, y, w, h, input) {
 	var scaleX = d3.scale.linear()
 		.domain(getMinMax(input))
@@ -467,18 +512,6 @@ function drawKDE(svg, x, y, w, h, input) {
 		.attr("fill", "transparent")
 		.attr("stroke", "gray")
 		.attr("stroke-width", "3")
-}
-
-function getMinMax(input) {
-	if (input.length === 0)
-		return [0,0]
-	var max = input[0]
-	var min = input[0]
-	for (var i=1; i<input.length; i++) {
-		if (input[i] > max) max = input[i]
-		if (input[i] < min) min = input[i]
-	}
-	return [min, max]
 }
 
 function heatmapTest() {
@@ -525,10 +558,6 @@ function drawHeatmap(svg, x, y, w, h, input) {
 				.attr("fill", "rgb("+color+","+color+","+color+")")
 		}
 	}
-}
-
-function round(number) {
-	return Number(number.toFixed(1))
 }
 
 function histTest() {
@@ -655,6 +684,113 @@ function drawScatterplotFormat(svg, x, y, w, h, vX, vY) {
 	}
 }
 
+function stream(svg) {
+	var faithful1 = [1,2,3,4,5,6]
+	var faithful2 = [4,3,5,1,2,0]
+	var f1xy = faithful1.map(function(d, i) {
+		return {x: i, y: d}
+	})
+	var f2xy = faithful2.map(function(d, i) {
+		return {x: i, y: d}
+	})
+	
+	console.log([f1xy, f2xy])
+	var stack = d3.layout.stack().offset("wiggle"), // zero, wiggle, expand
+		layers0 = stack([f1xy, f2xy])
+		
+	
+	var x = d3.scale.linear()
+		.domain([0, 7])
+		.range([0, 500])
+
+	var y = d3.scale.linear()
+		.domain([0, 7])
+		.range([300, 0])
+
+	var color = d3.scale.linear()
+		.range(["#aad", "#556"])
+
+	var area = d3.svg.area()
+		.x(function(d) { return x(d.x) })
+		.y0(function(d) { return y(d.y0) })
+		.y1(function(d) { return y(d.y0 + d.y) })
+	
+	svg.selectAll("path")
+		.data(layers0)
+	  .enter().append("path")
+		.attr("d", area)
+		.attr("fill", function() { return color(Math.random()) })
+}
+
+function kernelDensityEstimator(kernel, x) {
+  return function(sample) {
+    return x.map(function(x) {
+      return [x, d3.mean(sample, function(v) { return kernel(x - v) })]
+    })
+  }
+}
+
+function epanechnikovKernel(scale) {
+  return function(u) {
+    return Math.abs(u /= scale) <= 1 ? .75 * (1 - u * u) / scale : 0
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function getMinMax(input) {
+	if (input.length === 0)
+		return [0,0]
+	var max = input[0]
+	var min = input[0]
+	for (var i=1; i<input.length; i++) {
+		if (input[i] > max) max = input[i]
+		if (input[i] < min) min = input[i]
+	}
+	return [min, max]
+}
+
+function flowText(svg, x, y, w, h, text) {
+	// does not work. if I put the same svg block into the html, it works. do not know why.
+	var switchObj = svg.append("switch")
+	switchObj
+		.append("foreignObject")
+//		.attr("x", x).attr("y", y)
+		.attr("requiredFeatures", "http://www.w3.org/TR/SVG11/feature#Extensibility")
+		.attr("width", w).attr("height", h)
+		.append("p")
+		.attr("xmlns", "http://www.w3.org/1999/xhtml")
+		.text("Text goes here ok so i have along line of text and i expect it to be wrapped now")
+}
+
+function convertStrToNumber(val) {
+	var number = parseInt(val)
+	if (isNaN(number))
+		number = parseFloat(val)
+	if (isNaN(number) || number === undefined)
+		console.log("could not parse: "+val)
+	return number
+}
+
 function uniqueRandomNumbersArray(length, rangeMax) {
 	console.assert(length <= rangeMax)
 	var randomId = []
@@ -672,3 +808,34 @@ function uniqueRandomNumbersArray(length, rangeMax) {
 	}
 	return randomId
 }
+
+function round(number) {
+	return Number(number.toFixed(1))
+}
+
+
+function createTestData(numberOfRows) {
+	vars = [
+		{name:"v1", dataType:"metric", dictionary:[30, 50], data:[]},
+		{name:"v2", dataType:"ordinal", dictionary:[3,5,7,9], data:[]},
+		{name:"v3", dataType:"nominal", dictionary:["yes", "no", "kA"], data:[]},
+		{name:"v4", dataType:"ordinal", dictionary:["1-3", "3-10", "10-100"], data:[]},
+		{name:"v5", dataType:"metric", dictionary:[0, 100], data:[]}
+	]
+	
+	for (var i=0; i<vars.length; i++) {
+		var row = []
+		for (var k=0; k<numberOfRows; k++) {
+			if (vars[i].dataType === "metric") {
+				var min = vars[i].dictionary[0]
+				var max = vars[i].dictionary[1]
+				row.push(Math.random() * (max - min) + min)
+			} else { // get random category
+				// push id of category
+				row.push(Math.floor(Math.random()*vars[i].dictionary.length))
+			}
+		}
+		vars[i].data = row
+	}
+}
+
