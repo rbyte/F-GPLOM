@@ -19,8 +19,7 @@
 				<table id="yNames">
 				</table>
 			</td>
-			<td>
-				<svg id="viz"></svg>
+			<td id="viz">
 			</td>
 		</tr>
 		<tr>

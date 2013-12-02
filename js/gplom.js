@@ -1,5 +1,5 @@
 var vars
-var filter = []
+var filter = [{varId: 1, a: 0, b: 0}] // 
 var svg
 
 function interfaceInit() {
@@ -51,10 +51,11 @@ function main() {
 }
 
 function draw() {
-	var width = 1100, height = 830
+	width = 1100
+	height = 830
 //	var width = 4000, height = 4000
 	
-	svg = d3.select("#viz")
+	svg = d3.select("#viz").append("svg")
 		.attr("width", width)
 		.attr("height", height)
 	
@@ -67,7 +68,7 @@ function draw() {
 		.attr("fill-opacity", "0.03")
 	
 	defineGradients(svg)
-	var padding = 20
+	padding = 20
 	createGplomMatrix(svg, padding, padding, width-2*padding, height-2*padding)
 	
 //	stream(svg)
@@ -173,6 +174,23 @@ function defineGradients(svg) {
 		.append("stop")
 		.attr("stop-color", "rgb(240,240,240)")
 		.attr("offset", "100%")
+	
+	var lgradBlue = defs.append("linearGradient")
+		.attr("id", "lgBlue")
+		.attr("x1", "0%")
+		.attr("y1", "0%")
+		.attr("x2", "100%")
+		.attr("y2", "0%")
+	
+	lgradBlue
+		.append("stop")
+		.attr("stop-color", "rgb(200,200,255)")
+		.attr("offset", "0%")
+	
+	lgradBlue
+		.append("stop")
+		.attr("stop-color", "rgb(240,240,255)")
+		.attr("offset", "100%")
 		
 	var rgrad = defs.append("radialGradient")
 		.attr("id", "g1")
@@ -218,7 +236,7 @@ function defineGradients(svg) {
 
 
 
-function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
+function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal, update) {
 	wGlobal -= 5
 	hGlobal -= 5
 	var marginToTotal = 0.2
@@ -271,7 +289,10 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 			} else {
 				if (catIdX !== -1) { // histogram
 					drawHistogram(svg.append("g"), x, y, w, h,
-						getHistogramDataFromVars(catIdX, metricIdY))
+						getHistogramDataFromVars(catIdX, metricIdY, false), false)
+					
+					drawHistogram(svg.append("g"), x, y, w, h,
+						getHistogramDataFromVars(catIdX, metricIdY, true), true)
 						
 					if (i === vars.length-2) {
 						drawFilterX(svg, x, y+h, w, w*0.1, catIdX)
@@ -295,6 +316,7 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 					drawScatterplotFormat(svg.append("g"), x, y, w, h, vars[metricIdX].data, vars[metricIdY].data)
 				}
 			}
+			if (update === undefined)
 			if (k === i) {
 				xTextDiv.append("td").attr("style", xStyle).text(vars[
 					(catIdX === undefined || catIdX < 0 ? metricIdX : catIdX)
@@ -302,6 +324,7 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 			}
 			x += w + wMargin
 		}
+		if (update === undefined)
 		yTextDiv.append("tr").append("td").attr("style", yStyle).text(vars[
 			(catIdY === undefined || catIdY < 0 ? metricIdY : catIdY)
 		].name)
@@ -375,6 +398,15 @@ function setFilterRangeFor(varId, aOrB, val) {
 		})
 }
 
+function updateSVG() {
+	svg.remove()
+	svg = d3.select("#viz").append("svg")
+		.attr("width", width)
+		.attr("height", height)
+	
+	createGplomMatrix(svg, padding, padding, width-2*padding, height-2*padding, "update")
+}
+
 function drawFilterX(svg, x, y, w, h, varId) {
 	var color = 100
 	
@@ -407,6 +439,7 @@ function drawFilterX(svg, x, y, w, h, varId) {
 					setFilterRangeFor(varId, "b", id+1)
 					d3.select("#fsxb"+varId).attr("transform", "translate("+(id+2)*barWidth+", 0)")
 				}
+				updateSVG()
 			}
 			if (dxr <= -0.5 && ((aOrB === "a" && id > 0) || (aOrB === "b" && id > 0))) {
 				setFilterRangeFor(varId, aOrB, id-1)
@@ -416,6 +449,7 @@ function drawFilterX(svg, x, y, w, h, varId) {
 					setFilterRangeFor(varId, "a", id-1)
 					d3.select("#fsxa"+varId).attr("transform", "translate("+(id-1)*barWidth+", 0)")
 				}
+				updateSVG()
 			}
 		})
 		.on("dragstart", function() {
@@ -463,13 +497,35 @@ function drawFilterX(svg, x, y, w, h, varId) {
 	
 }
 
-function getHistogramDataFromVars(catId, metricId) {
+function getHistogramDataFromVars(catId, metricId, filtered) {
 	var result = new Array(vars[catId].dictionary.length)
 	for (var i=0; i<result.length; i++)
 		result[i] = 0
+	
 	for (var i=0; i<vars[catId].data.length; i++)
-		if (typeof vars[metricId].data[i] !== "string")
-			result[vars[catId].data[i]] += vars[metricId].data[i]
+		if (typeof vars[metricId].data[i] !== "string") {
+			if (!filtered) {
+				result[vars[catId].data[i]] += vars[metricId].data[i]
+			} else {
+				var isFiltered = false
+				for (var f=0; f<filter.length; f++) {
+					var filteredVar = vars[filter[f].varId]
+					var val = filteredVar.data[i]
+					if (filteredVar.dataType !== "metric") {
+						if (val < filter[f].a || val > filter[f].b) {
+							isFiltered = true
+							break
+						}
+					} else {
+						// TODO
+					}
+				}
+				if (!isFiltered)
+					result[vars[catId].data[i]] += vars[metricId].data[i]
+
+
+			}
+		}
 	return result
 }
 
@@ -569,10 +625,10 @@ function histTest() {
 	for (var i=0; i<10; i++)
 		input.push(Math.random())
 	
-	drawHistogram(svg, 10, 10, 300, 200, input)
+	drawHistogram(svg, 10, 10, 300, 200, input, false)
 }
 
-function drawHistogram(svg, x, y, w, h, input) {
+function drawHistogram(svg, x, y, w, h, input, filtered) {
 	var minMax = getMinMax(input), min = minMax[0], max = minMax[1]
 	console.assert(min >= 0)
 	if (max === 0) {
@@ -598,7 +654,7 @@ function drawHistogram(svg, x, y, w, h, input) {
 			.attr("y", round(yy))
 			.attr("width", round(ww))
 			.attr("height", round(barHeight))
-			.attr("fill", "url(#lg1)")
+			.attr("fill", "url(#"+(filtered ? "lgBlue" : "lg1")+")")
 		
 		svg
 			.append("line")
