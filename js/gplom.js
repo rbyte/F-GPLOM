@@ -184,12 +184,12 @@ function defineGradients(svg) {
 	
 	lgradBlue
 		.append("stop")
-		.attr("stop-color", "rgb(200,200,255)")
+		.attr("stop-color", "rgb(150,150,255)")
 		.attr("offset", "0%")
 	
 	lgradBlue
 		.append("stop")
-		.attr("stop-color", "rgb(240,240,255)")
+		.attr("stop-color", "rgb(220,220,255)")
 		.attr("offset", "100%")
 		
 	var rgrad = defs.append("radialGradient")
@@ -201,7 +201,7 @@ function defineGradients(svg) {
 	rgrad
 		.append("stop")
 		.attr("stop-color", "rgb(0,0,0)")
-		.attr("stop-opacity", "0.7")
+		.attr("stop-opacity", "0.5")
 		.attr("offset", "0%")
 	
 	rgrad
@@ -236,7 +236,7 @@ function defineGradients(svg) {
 
 
 
-function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal, update) {
+function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 	wGlobal -= 5
 	hGlobal -= 5
 	var marginToTotal = 0.2
@@ -284,15 +284,11 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal, update) {
 			}
 			if (catIdY !== -1) { // heatmap
 				console.assert(catIdX !== -1 && catIdX !== catIdY)
-				drawHeatmap(svg.append("g"), x, y, w, h,
+				drawHeatmap(svg.append("g").attr("class", "heatmap"), x, y, w, h,
 					getHeatmapDataFromVars(catIdX, catIdY))
 			} else {
 				if (catIdX !== -1) { // histogram
-					drawHistogram(svg.append("g"), x, y, w, h,
-						getHistogramDataFromVars(catIdX, metricIdY, false), false)
-					
-					drawHistogram(svg.append("g"), x, y, w, h,
-						getHistogramDataFromVars(catIdX, metricIdY, true), true)
+					drawHistogram(svg, x, y, w, h, catIdX, metricIdY)
 						
 					if (i === vars.length-2) {
 						drawFilterX(svg, x, y+h, w, w*0.1, catIdX)
@@ -313,10 +309,10 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal, update) {
 					console.assert(metricIdX !== -1)
 					
 //					if (false)
-					drawScatterplotFormat(svg.append("g"), x, y, w, h, vars[metricIdX].data, vars[metricIdY].data)
+					drawScatterplotFormat(svg.append("g").attr("class", "scatterplot"), x, y, w, h,
+						vars[metricIdX].data, vars[metricIdY].data)
 				}
 			}
-			if (update === undefined)
 			if (k === i) {
 				xTextDiv.append("td").attr("style", xStyle).text(vars[
 					(catIdX === undefined || catIdX < 0 ? metricIdX : catIdX)
@@ -324,7 +320,6 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal, update) {
 			}
 			x += w + wMargin
 		}
-		if (update === undefined)
 		yTextDiv.append("tr").append("td").attr("style", yStyle).text(vars[
 			(catIdY === undefined || catIdY < 0 ? metricIdY : catIdY)
 		].name)
@@ -396,15 +391,6 @@ function setFilterRangeFor(varId, aOrB, val) {
 			a: aOrB === "a" ? val : 0,
 			b: aOrB === "b" ? val : vars[varId].dictionary.length-1
 		})
-}
-
-function updateSVG() {
-	svg.remove()
-	svg = d3.select("#viz").append("svg")
-		.attr("width", width)
-		.attr("height", height)
-	
-	createGplomMatrix(svg, padding, padding, width-2*padding, height-2*padding, "update")
 }
 
 function drawFilterX(svg, x, y, w, h, varId) {
@@ -520,10 +506,10 @@ function getHistogramDataFromVars(catId, metricId, filtered) {
 						// TODO
 					}
 				}
-				if (!isFiltered)
-					result[vars[catId].data[i]] += vars[metricId].data[i]
-
-
+				if (!isFiltered) {
+					if (!isNaN(vars[metricId].data[i])) // TODO NaN?
+						result[vars[catId].data[i]] += vars[metricId].data[i]
+				}
 			}
 		}
 	return result
@@ -544,6 +530,147 @@ function getHeatmapDataFromVars(v1id, v2id) {
 		if (typeof vars[v1id].data[i] !== "string" && typeof vars[v2id].data[i] !== "string")
 			result[vars[v1id].data[i]][vars[v2id].data[i]]++
 	return result
+}
+
+function histTest() {
+	var svg = d3.select("#viz")
+		.attr("width", 960)
+		.attr("height", 500)
+	
+	var input = []
+	for (var i=0; i<10; i++)
+		input.push(Math.random())
+	
+	drawHistogram(svg, 10, 10, 300, 200, input, false)
+}
+
+function drawHistogram(svg, x, y, w, h, catIdX, metricIdY) {
+	var input = getHistogramDataFromVars(catIdX, metricIdY, false)
+	var inputFiltered = getHistogramDataFromVars(catIdX, metricIdY, true)
+	
+	var minMax = getMinMax(input), min = minMax[0], max = minMax[1]
+	console.assert(min >= 0)
+	if (max === 0) {
+		max += 1
+	}
+	
+	var baseline = 0
+	
+	var histG = svg.append("g")
+		.attr("class", "histogram")
+		.attr("catIdX", catIdX)
+		.attr("metricIdY", metricIdY)
+		.attr("_x", round(x))
+		.attr("_y", round(y))
+		.attr("_w", round(w))
+		.attr("_h", round(h))
+		.attr("_max", max)
+		.attr("_min", min)
+	
+	histG
+		.append("line")
+		.attr("x1", x).attr("y1", y+h)
+		.attr("x2", x+w).attr("y2", y+h)
+		.attr("stroke", "gray")
+		.attr("stroke-width", "3")
+	
+	var ww = 1/input.length*w
+	for (var i=0; i<input.length; i++) {
+		var barHeight = h*(input[i]-baseline)/(max-baseline)
+		var xx = x+i/input.length*w
+		var yy = y+(h-barHeight)
+		
+		histG
+			.append("rect")
+			.attr("x", round(xx))
+			.attr("y", round(yy))
+			.attr("width", round(ww))
+			.attr("height", round(barHeight))
+			.attr("fill", "url(#lg1)")
+		
+		histG
+			.append("line")
+			.attr("x1", xx).attr("y1", yy)
+			.attr("x2", xx+ww).attr("y2", yy)
+			.attr("stroke", "black")
+			.attr("stroke-width", "1")
+			
+		// FILTERED
+		if (inputFiltered !== undefined) {
+			var barHeightFiltered = h*(inputFiltered[i]-baseline)/(max-baseline)
+			var yyF = y+(h-barHeightFiltered)
+			histG
+				.append("rect")
+				.attr("x", round(xx))
+				.attr("y", round(yyF))
+				.attr("id", "hist"+catIdX+"x"+metricIdY+"bar"+i)
+				.attr("width", round(ww))
+				.attr("height", round(barHeightFiltered))
+				.attr("fill", "url(#lgBlue)")
+
+			histG
+				.append("line")
+				.attr("x1", xx).attr("y1", yyF)
+				.attr("x2", xx+ww).attr("y2", yyF)
+				.attr("stroke", "black")
+				.attr("stroke-width", "1")
+		}
+	}
+	
+	var numberOfRulers = 3
+	for (var i=1; i<(numberOfRulers+1); i++) {
+		var yy = y+h-i/(numberOfRulers+1)*h
+		histG
+			.append("line")
+			.attr("x1", round(x)).attr("y1", round(yy))
+			.attr("x2", round(x+w)).attr("y2", round(yy))
+			.attr("stroke", "rgb(255,255,255)")
+			.attr("stroke-opacity", "0.5")
+			.attr("stroke-width", "1")
+	}
+}
+
+function updateSVG() {
+	d3.selectAll(".histogram").each(function(d, i) {
+		var hist = d3.select(this)
+		var catIdX = hist.attr("catIdX")
+		var metricIdY = hist.attr("metricIdY")
+		
+		
+//		var x = hist.attr("_x")
+		var y = parseFloat(hist.attr("_y"))
+//		var w = hist.attr("_w")
+		var h = parseFloat(hist.attr("_h"))
+		var max = parseFloat(hist.attr("_max"))
+		
+		if (isNaN(y) || isNaN(h) || isNaN(max) || typeof y === "string" || typeof h === "string" || typeof max === "string") {
+			console.log("BLA")
+			return
+		}
+		
+		
+//		console.log(hihist.attr("_y")st.attr("_y"))
+//		var min = hist.attr("_min")
+		var baseline = 0
+		
+		var inputFiltered = getHistogramDataFromVars(catIdX, metricIdY, true)
+//		console.log(filter)
+//		console.log(inputFiltered)
+		
+		for (var i=0; i<inputFiltered.length; i++) {
+			if (isNaN(inputFiltered[i]))
+				console.log("BLA")
+			
+			var barHeightFiltered = h*(inputFiltered[i]-baseline)/(max-baseline)
+			var yyF = y+(h-barHeightFiltered)
+//			console.log(barHeightFiltered+", "+yyF)
+			
+			d3.select("#hist"+catIdX+"x"+metricIdY+"bar"+i)
+				.attr("y", round(yyF))
+				.attr("height", round(barHeightFiltered))
+		}
+		
+	})
 }
 
 function drawKDE(svg, x, y, w, h, input) {
@@ -613,67 +740,6 @@ function drawHeatmap(svg, x, y, w, h, input) {
 				.attr("height", round(hh))
 				.attr("fill", "rgb("+color+","+color+","+color+")")
 		}
-	}
-}
-
-function histTest() {
-	var svg = d3.select("#viz")
-		.attr("width", 960)
-		.attr("height", 500)
-	
-	var input = []
-	for (var i=0; i<10; i++)
-		input.push(Math.random())
-	
-	drawHistogram(svg, 10, 10, 300, 200, input, false)
-}
-
-function drawHistogram(svg, x, y, w, h, input, filtered) {
-	var minMax = getMinMax(input), min = minMax[0], max = minMax[1]
-	console.assert(min >= 0)
-	if (max === 0) {
-		max += 1
-	}
-	var baseline = 0
-	
-	svg
-		.append("line")
-		.attr("x1", x).attr("y1", y+h)
-		.attr("x2", x+w).attr("y2", y+h)
-		.attr("stroke", "gray")
-		.attr("stroke-width", "3")
-	
-	var ww = 1/input.length*w
-	for (var i=0; i<input.length; i++) {
-		var barHeight = h*(input[i]-baseline)/(max-baseline)
-		var xx = x+i/input.length*w
-		var yy = y+(h-barHeight)
-		svg
-			.append("rect")
-			.attr("x", round(xx))
-			.attr("y", round(yy))
-			.attr("width", round(ww))
-			.attr("height", round(barHeight))
-			.attr("fill", "url(#"+(filtered ? "lgBlue" : "lg1")+")")
-		
-		svg
-			.append("line")
-			.attr("x1", xx).attr("y1", yy)
-			.attr("x2", xx+ww).attr("y2", yy)
-			.attr("stroke", "black")
-			.attr("stroke-width", "1")
-	}
-	
-	var numberOfRulers = 3
-	for (var i=1; i<(numberOfRulers+1); i++) {
-		var yy = y+h-i/(numberOfRulers+1)*h
-		svg
-			.append("line")
-			.attr("x1", round(x)).attr("y1", round(yy))
-			.attr("x2", round(x+w)).attr("y2", round(yy))
-			.attr("stroke", "rgb(255,255,255)")
-			.attr("stroke-opacity", "0.5")
-			.attr("stroke-width", "1")
 	}
 }
 
@@ -866,6 +932,8 @@ function uniqueRandomNumbersArray(length, rangeMax) {
 }
 
 function round(number) {
+//	if (typeof number === "")
+
 	return Number(number.toFixed(1))
 }
 
