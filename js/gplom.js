@@ -1,5 +1,6 @@
 var vars
-var filter = [{varId: 1, a: 0, b: 0}] // 
+var filter = []
+var filterMask = []
 var svg
 
 function interfaceInit() {
@@ -16,29 +17,35 @@ function main() {
 		var dataTypesCount = []
 		var dataTypes = ["ordinal", "metric", "dichotomous", "nominal"]
 		
-//		for (var k=0; k<dataTypes.length; k++)
-//			dataTypesCount.push(0)
-//		
-//		for (var i=0; i<vars.length; i++)
-//			for (var k=0; k<dataTypes.length; k++)
-//				if (vars[i].dataType === dataTypes[k]) {
-//					dataTypesCount[k]++
-//					break
-//				}
-//		
-//		for (var k=0; k<dataTypes.length; k++) {
-//			console.log(dataTypes[k]+": "+dataTypesCount[k])
-//			for (var i=0; i<vars.length; i++)
-//				if (vars[i].dataType === dataTypes[k]) {
-//					console.log("\t"+vars[i].name+", "+vars[i].data.length+", "+vars[i].detail+", "+vars[i].dictionary)
-//				}
-//		}
-		
-//		document.write(JSON.stringify(vars))
+		if (false) {
+			for (var k=0; k<dataTypes.length; k++)
+				dataTypesCount.push(0)
+
+			for (var i=0; i<vars.length; i++)
+				for (var k=0; k<dataTypes.length; k++)
+					if (vars[i].dataType === dataTypes[k]) {
+						dataTypesCount[k]++
+						break
+					}
+
+			for (var k=0; k<dataTypes.length; k++) {
+				console.log(dataTypes[k]+": "+dataTypesCount[k])
+				for (var i=0; i<vars.length; i++)
+					if (vars[i].dataType === dataTypes[k]) {
+						console.log("\t"+vars[i].name+", "+vars[i].data.length+", "+vars[i].detail+", "+vars[i].dictionary)
+					}
+			}
+			
+			document.write(JSON.stringify(vars))
+		}
 		
 		var numberOfVarsToDraw = 10
 		if (vars.length > numberOfVarsToDraw)
 			vars.splice(numberOfVarsToDraw, vars.length-numberOfVarsToDraw)
+		
+		for (var k=0; k<vars[0].data.length; k++)
+			filterMask.push(0)
+		
 		draw()
 		
 		console.log("done!")
@@ -296,13 +303,13 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 						
 					if (false) {
 					// create new stream from each category
-					var catBuckets = []
-					for (var m=0; m<vars[catIdX].dictionary.length; m++)
-						catBuckets.push([])
-					for (var m=0; m<vars[metricIdY].data.length; m++)
-						catBuckets[vars[catIdX].data[m]].push(vars[metricIdY].data[m])
-					for (var m=0; m<vars[catIdX].dictionary.length; m++)
-						drawKDE(svg.append("g"), x, y, w, h, catBuckets[m])
+						var catBuckets = []
+						for (var m=0; m<vars[catIdX].dictionary.length; m++)
+							catBuckets.push([])
+						for (var m=0; m<vars[metricIdY].data.length; m++)
+							catBuckets[vars[catIdX].data[m]].push(vars[metricIdY].data[m])
+						for (var m=0; m<vars[catIdX].dictionary.length; m++)
+							drawKDE(svg.append("g"), x, y, w, h, catBuckets[m])
 					}
 				} else { // scatterplot
 					metricIdX = nextMetric(metricIdX)
@@ -376,21 +383,70 @@ function getFilterRangeFor(varId, aOrB) {
 	return aOrB === "a" ? 0 : (vars[varId].dictionary.length-1)
 }
 
+function updateFilterMask(varId, plus, newToBeF, aOrB) {
+	if (vars[varId].dataType === "metric") {
+		for (var i=0; i<filterMask.length; i++) {
+			if (typeof vars[varId].data[i] !== "string") {
+				// intricate difference: range max or min included ?
+				if (aOrB === "a") {
+					if (newToBeF.min <= vars[varId].data[i]
+					   && newToBeF.max > vars[varId].data[i])
+					   filterMask[i] += 1
+				} else {
+					if (newToBeF.min < vars[varId].data[i]
+					   && newToBeF.max >= vars[varId].data[i])
+					   filterMask[i] -= 1
+				}
+				console.assert(filterMask[i] >= 0)
+			}
+		}
+	} else {
+		for (var i=0; i<filterMask.length; i++) {
+			// filter: [min, max)
+			for (var k=newToBeF.min; k<newToBeF.max; k++) {
+				if (vars[varId].data[i] === k) {
+					filterMask[i] += (plus ? 1 : -1)
+					console.assert(filterMask[i] >= 0)
+				}
+			}
+		}
+	}
+}
+
 function setFilterRangeFor(varId, aOrB, val) {
+	console.assert(val < vars[varId].dictionary.length && val >= 0)
+	var newToBeF = []
 	for (var i=0; i<filter.length; i++) {
 		if (filter[i].varId === varId) {
+			var oldVal = filter[i][aOrB]
 			filter[i][aOrB] = val
-			if (filter[i].a === 0 && filter[i].b === vars[varId].dictionary.length-1)
+			if (filter[i].a === 0 && filter[i].b === vars[varId].dictionary.length-1) {
 				filter.splice(i, 1)
+			}
+			newToBeF.min = Math.min(oldVal, val) + (vars[varId].dataType !== "metric" && aOrB === "b" ? 1: 0)
+			newToBeF.max = Math.max(oldVal, val) + (vars[varId].dataType !== "metric" && aOrB === "b" ? 1: 0)
+			
+			updateFilterMask(varId, aOrB === "a" ? oldVal < val : val < oldVal, newToBeF, aOrB)
 			return
 		}
 	}
-	if ((aOrB === "a" && val !== 0) || (aOrB === "b" && val !== vars[varId].dictionary.length-1))
+	// create new
+	if ((aOrB === "a" && val !== 0) || (aOrB === "b" && val !== vars[varId].dictionary.length-1)) {
+		var oldVal = aOrB === "a" ? 0 : vars[varId].dictionary.length-1
+		var a = aOrB === "a" ? val : 0
+		var b = aOrB === "b" ? val : vars[varId].dictionary.length-1
+		
 		filter.push({
 			varId: varId,
-			a: aOrB === "a" ? val : 0,
-			b: aOrB === "b" ? val : vars[varId].dictionary.length-1
+			a: a,
+			b: b
 		})
+		
+		// filter: [min, max)
+		newToBeF.min = aOrB === "a" ? 0 : b+1
+		newToBeF.max = aOrB === "a" ? a : vars[varId].dictionary.length
+		updateFilterMask(varId, true, newToBeF)
+	}
 }
 
 function drawFilterX(svg, x, y, w, h, varId) {
@@ -488,6 +544,18 @@ function getHistogramDataFromVars(catId, metricId, filtered) {
 	for (var i=0; i<result.length; i++)
 		result[i] = 0
 	
+//	filterMask
+	for (var i=0; i<vars[catId].data.length; i++)
+		if (typeof vars[metricId].data[i] !== "string") {
+			if (!filtered) {
+				result[vars[catId].data[i]] += vars[metricId].data[i]
+			} else {
+				if (filterMask[i] === 0)
+					result[vars[catId].data[i]] += vars[metricId].data[i]
+			}
+		}
+	
+	if (false)
 	for (var i=0; i<vars[catId].data.length; i++)
 		if (typeof vars[metricId].data[i] !== "string") {
 			if (!filtered) {
@@ -507,8 +575,8 @@ function getHistogramDataFromVars(catId, metricId, filtered) {
 					}
 				}
 				if (!isFiltered) {
-					if (!isNaN(vars[metricId].data[i])) // TODO NaN?
-						result[vars[catId].data[i]] += vars[metricId].data[i]
+					console.assert(!isNaN(vars[metricId].data[i]))
+					result[vars[catId].data[i]] += vars[metricId].data[i]
 				}
 			}
 		}
@@ -631,36 +699,24 @@ function drawHistogram(svg, x, y, w, h, catIdX, metricIdY) {
 }
 
 function updateSVG() {
+//	console.log(filter)
+	
 	d3.selectAll(".histogram").each(function(d, i) {
 		var hist = d3.select(this)
 		var catIdX = hist.attr("catIdX")
 		var metricIdY = hist.attr("metricIdY")
 		
-		
-//		var x = hist.attr("_x")
 		var y = parseFloat(hist.attr("_y"))
-//		var w = hist.attr("_w")
 		var h = parseFloat(hist.attr("_h"))
 		var max = parseFloat(hist.attr("_max"))
 		
-		if (isNaN(y) || isNaN(h) || isNaN(max) || typeof y === "string" || typeof h === "string" || typeof max === "string") {
-			console.log("BLA")
-			return
-		}
+		console.assert(!(isNaN(y) || isNaN(h) || isNaN(max) || typeof y === "string" || typeof h === "string" || typeof max === "string"))
 		
-		
-//		console.log(hihist.attr("_y")st.attr("_y"))
-//		var min = hist.attr("_min")
 		var baseline = 0
-		
 		var inputFiltered = getHistogramDataFromVars(catIdX, metricIdY, true)
-//		console.log(filter)
-//		console.log(inputFiltered)
 		
 		for (var i=0; i<inputFiltered.length; i++) {
-			if (isNaN(inputFiltered[i]))
-				console.log("BLA")
-			
+			console.assert(!isNaN(inputFiltered[i]))
 			var barHeightFiltered = h*(inputFiltered[i]-baseline)/(max-baseline)
 			var yyF = y+(h-barHeightFiltered)
 //			console.log(barHeightFiltered+", "+yyF)
@@ -669,7 +725,6 @@ function updateSVG() {
 				.attr("y", round(yyF))
 				.attr("height", round(barHeightFiltered))
 		}
-		
 	})
 }
 
@@ -757,7 +812,7 @@ function scatter() {
 	drawScatterplotFormat(svg, 10, 10, 100, 200, dataX, dataY)
 }
 
-function drawScatterplotFormat(svg, x, y, w, h, vX, vY) {
+function drawScatterplotFormat(svg, x, y, w, h, vXd, vYd) {
 	svg
 		.append("rect")
 		.attr("x", x).attr("y", y)
@@ -770,17 +825,24 @@ function drawScatterplotFormat(svg, x, y, w, h, vX, vY) {
 		.attr("stroke-width", "1")
 	
 	var maxPointsDisplayed = 50
-	console.assert(vX.length === vY.length)
+	console.assert(vXd.length === vYd.length)
 	
-	for (var i=0; i<Math.max(vX.length,vY.length); i++) {
-		if (typeof vX[i] === "string" || typeof vY[i] === "string"
-			|| isNaN(vY[i]) || isNaN(vX[i])
-			|| vY[i] === undefined || vX[i] === undefined) {
-			vX.splice(i, 1)
-			vY.splice(i, 1)
+	var vX = []
+	var vY = []
+	// cleanup metric data pair
+	for (var i=0; i<Math.max(vXd.length,vYd.length); i++) {
+		if (typeof vXd[i] !== "string"
+			&& typeof vYd[i] !== "string"
+			&& !isNaN(vYd[i])
+			&& !isNaN(vXd[i])
+			&& vYd[i] !== undefined
+			&& vXd[i] !== undefined) {
+				vX.push(vXd[i])
+				vY.push(vYd[i])
 		}
 	}
-	var minLength = Math.min(vX.length,vY.length)
+	
+	var length = vX.length
 	
 	var minMax = getMinMax(vX), Xmin = minMax[0], Xmax = minMax[1]
 	var minMax = getMinMax(vY), Ymin = minMax[0], Ymax = minMax[1]
@@ -792,11 +854,11 @@ function drawScatterplotFormat(svg, x, y, w, h, vX, vY) {
 		Ymax += 1
 		Ymin -= 1
 	}
-	if (minLength > maxPointsDisplayed)
-		var randomId = uniqueRandomNumbersArray(maxPointsDisplayed, minLength-1)
+	if (length > maxPointsDisplayed)
+		var randomId = uniqueRandomNumbersArray(maxPointsDisplayed, length-1)
 	
-	for (var i=0; i<maxPointsDisplayed && i<minLength; i++) {
-		var idx = minLength > maxPointsDisplayed ? randomId[i] : i
+	for (var i=0; i<maxPointsDisplayed && i<length; i++) {
+		var idx = length > maxPointsDisplayed ? randomId[i] : i
 		svg
 		.append("circle")
 		.attr("fill", "url(#g1)")
@@ -845,17 +907,17 @@ function stream(svg) {
 }
 
 function kernelDensityEstimator(kernel, x) {
-  return function(sample) {
-    return x.map(function(x) {
-      return [x, d3.mean(sample, function(v) { return kernel(x - v) })]
-    })
-  }
+	return function(sample) {
+		return x.map(function(x) {
+			return [x, d3.mean(sample, function(v) { return kernel(x - v) })]
+		})
+	}
 }
 
 function epanechnikovKernel(scale) {
-  return function(u) {
-    return Math.abs(u /= scale) <= 1 ? .75 * (1 - u * u) / scale : 0
-  }
+	return function(u) {
+		return Math.abs(u /= scale) <= 1 ? .75 * (1 - u * u) / scale : 0
+	}
 }
 
 
