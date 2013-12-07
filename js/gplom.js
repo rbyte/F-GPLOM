@@ -343,8 +343,7 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 					console.assert(metricIdX !== -1)
 					
 //					if (false)
-					drawScatterplotFormat(svg.append("g").attr("class", "scatterplot"), x, y, w, h,
-						metricIdX, metricIdY)
+					drawScatterplotFirsttime(svg, x, y, w, h, metricIdX, metricIdY)
 				}
 			}
 			var curVar = catIdX === undefined || catIdX < 0 ? metricIdX : catIdX
@@ -520,12 +519,12 @@ var ondrag = d3.behavior.drag().on("drag", function() {
 			// TODO is is only correct if the w & h of all diagrams is the same!
 			// we would actually need to get w & h from the NxOrY d3 obj
 			d3.select("#fsx"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate("+trL*barX+", 0)")
-			d3.select("#fsy"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate(0, "+trL*barY+")")
+			d3.select("#fsy"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate(0, "+(-trL*barY)+")")
 		}
 		var barSize = isX ? barX : barY
-		var pos = (isX ? x : y)+(c+(aOrB === "b" ? 1 : 0))*barSize
-		var p = ((isX ? mouseX : mouseY)-pos)/barSize
-//		console.log(id+", "+dxr)
+		var pos = (isX ? x : y+h)+(isX ? 1 : -1)*(c+(aOrB === "b" ? 1 : 0))*barSize
+		var p = (isX ? 1 : -1)*((isX ? mouseX : mouseY)-pos)/barSize
+		console.log(pos+" , "+p)
 		if (p >= 0.5 && ((aOrB === "a" && c < numberOfCat-1) || (aOrB === "b" && c < numberOfCat-1))) {
 			setFilterRangeFor(varId, aOrB, c+1)
 			transform((c+1+ (aOrB === "b" ? 1 : 0)), aOrB)
@@ -547,14 +546,14 @@ var ondrag = d3.behavior.drag().on("drag", function() {
 			updateSVG()
 		}
 	} else {
-		var p = isX ? (mouseX-x)/w : (mouseY-y)/h
+		var p = isX ? (mouseX-x)/w : 1-(mouseY-y)/h
 		p = Math.min(1, p)
 		p = Math.max(0, p)
 		var newFilterVal = vars[varId].min + p* (vars[varId].max - vars[varId].min)
 		setFilterRangeFor(varId, aOrB, newFilterVal)
 		function transform(aOrB) {
 			d3.select("#fsx"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate("+(p*w)+", 0)")
-			d3.select("#fsy"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate(0, "+(p*h)+")")
+			d3.select("#fsy"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate(0, "+(-p*h)+")")
 		}
 		transform(aOrB)
 		if ((aOrB === "a" && newFilterVal > Nc) || (aOrB === "b" && newFilterVal < Nc)) {
@@ -577,21 +576,22 @@ var ondrag = d3.behavior.drag().on("drag", function() {
 function drawFilterY(svg, x, y, w, h, varId) {
 	var size = 10
 	var fss = new Array()
+	// the A is at the bottom!
 	fss.push(svg
 		.append("path")
 		.attr("class", "filterSlider")
 		.attr("id", "fsya"+varId)
 		.attr("aOrB", "a")
 		.attr("xOrY", "y")
-		.attr("d", "M"+x+","+y+" L"+(x-size)+","+y+" L"+(x-size)+","+(y - size)+" Z")
+		.attr("d", "M"+x+","+(y+h)+" L"+(x-size)+","+(y+h)+" L"+(x-size)+","+(y+h + size)+" Z")
 	)
 	fss.push(svg.append("path")
 		.attr("class", "filterSlider")
 		.attr("id", "fsyb"+varId)
 		.attr("aOrB", "b")
 		.attr("xOrY", "y")
-		.attr("d", "M"+x+","+y+" L"+(x-size)+","+y+" L"+(x-size)+","+(y + size)+" Z")
-		.attr("transform", "translate(0, "+h+")")
+		.attr("d", "M"+x+","+(y+h)+" L"+(x-size)+","+(y+h)+" L"+(x-size)+","+(y+h - size)+" Z")
+		.attr("transform", "translate(0, "+(-h)+")")
 	)
 	commonSliders(svg, x, y, w, h, varId, fss)
 }
@@ -792,6 +792,20 @@ function updateSVG() {
 				.attr("y2", yyF)
 		}
 	})
+	
+	d3.selectAll(".scatterplot").each(function(d, i) {
+		var scatter = d3.select(this)
+		var id0 = scatter.attr("id0")
+		var id1 = scatter.attr("id1")
+		var x = parseFloat(scatter.attr("_x"))
+		var y = parseFloat(scatter.attr("_y"))
+		var w = parseFloat(scatter.attr("_w"))
+		var h = parseFloat(scatter.attr("_h"))
+		
+		scatter.remove()
+		
+		drawScatterplotFirsttime(svg, x, y, w, h, id0, id1)
+	})
 }
 
 function drawKDE(svg, x, y, w, h, input) {
@@ -873,7 +887,7 @@ function drawHeatmap(svg, x, y, w, h, input) {
 			svg
 				.append("rect")
 				.attr("x", round(x+i*ww))
-				.attr("y", round(y+k*hh))
+				.attr("y", round(y+(h-(k+1)*hh)))
 				.attr("width", round(ww))
 				.attr("height", round(hh))
 				.attr("fill", "rgb("+color+","+color+","+color+")")
@@ -896,8 +910,17 @@ function scatter() {
 //	drawScatterplotFormat(svg, 10, 10, 100, 200, dataX, dataY)
 }
 
-function drawScatterplotFormat(svg, x, y, w, h, id0, id1) {
-	svg
+function drawScatterplotFirsttime(svg, x, y, w, h, id0, id1) {
+	var scatter = svg.append("g")
+		.attr("class", "scatterplot")
+		.attr("id0", id0)
+		.attr("id1", id1)
+		.attr("_x", round(x))
+		.attr("_y", round(y))
+		.attr("_w", round(w))
+		.attr("_h", round(h))
+	
+	scatter
 		.append("rect")
 		.attr("x", x).attr("y", y)
 		.attr("width", w)
@@ -908,33 +931,41 @@ function drawScatterplotFormat(svg, x, y, w, h, id0, id1) {
 		.attr("stroke-opacity", "0.4")
 		.attr("stroke-width", "1")
 	
-	var maxPointsDisplayed = 50
+	updateScatterplot(scatter, x, y, w, h, id0, id1)
+}
+
+function updateScatterplot(scatter, x, y, w, h, id0, id1) {
+	var maxPointsDisplayed = 500
 	console.assert(vars[id0].data.length === vars[id1].data.length)
+	var length = vars[id0].data.length
 	
-	var vX = []
-	var vY = []
-	var length = 0
+	var vX = new Array(length)
+	var vY = new Array(length)
+	var goodEntries = 0
 	// cleanup metric data pair
-	for (var i=0; i<Math.max(vars[id0].data.length, vars[id1].data.length); i++) {
+	for (var i=0; i<length; i++) {
 		if (	typeof vars[id0].data[i] !== "string"
 			&&	typeof vars[id1].data[i] !== "string"
 			&& !isNaN(vars[id0].data[i])
 			&& !isNaN(vars[id1].data[i])
 			&& vars[id0].data[i] !== undefined
 			&& vars[id1].data[i] !== undefined) {
-				vX.push(vars[id0].data[i])
-				vY.push(vars[id1].data[i])
-				length++
+				vX[i] = true
+				vY[i] = true
+				goodEntries++
 		} else {
 			// this way, the relation to the data indices is not broken
-				vX.push(undefined)
-				vY.push(undefined)
+				vX[i] = false
+				vY[i] = false
 		}
 	}
 	
+	var Xmin = vars[id0].min, Xmax = vars[id0].max
+	var Ymin = vars[id1].min, Ymax = vars[id1].max
+	
 	// min & max have to be calc individually for every metric pair
-	var minMax = getMinMaxNew(vX), Xmin = minMax[0], Xmax = minMax[1]
-	var minMax = getMinMaxNew(vY), Ymin = minMax[0], Ymax = minMax[1]
+//	var minMax = getMinMaxNew(vX), Xmin = minMax[0], Xmax = minMax[1]
+//	var minMax = getMinMaxNew(vY), Ymin = minMax[0], Ymax = minMax[1]
 	
 	if (Xmax-Xmin < 0.0001) {
 		Xmax += 1
@@ -945,40 +976,47 @@ function drawScatterplotFormat(svg, x, y, w, h, id0, id1) {
 		Ymin -= 1
 	}
 	
-	// filter
-	if (length > maxPointsDisplayed) {
-		var randomId = uniqueRandomNumbersArray(maxPointsDisplayed, length-1)
+	for (var i=0; i<length; i++) {
+		if (filterMask[i] !== 0) {
+			if (vX[i]) {
+				goodEntries--
+				vX[i] = false
+				vY[i] = false
+			}
+		}
+	}
+	
+	// "filter" so that #maxPointsDisplayed are not undefined
+	if (goodEntries > maxPointsDisplayed) {
+		var randomId = uniqueRandomNumbersArray(maxPointsDisplayed, goodEntries-1)
 		
 		randomId.sort(function(a,b) { return a-b })
 		
 		var validCount = 0
 		var rIdI = 0
 		for (var i=0; i<vX.length; i++) {
-			if (vX[i] !== undefined) {
+			if (vX[i]) {
 				if (rIdI < randomId.length && validCount >= randomId[rIdI]) {
 					rIdI++
 				} else {
-					vX[i] = undefined
-					vY[i] = undefined
+					vX[i] = false
+					vY[i] = false
 				}
 				validCount++
 			}
 		}
 	}
 	
-	var c = 0
 	for (var i=0; i<vX.length; i++) {
-		if (vX[i] !== undefined && vY[i] !== undefined) {
-			svg
+		if (vX[i] && vY[i]) {
+			scatter
 			.append("circle")
 			.attr("fill", "url(#g1)")
 			.attr("r", 4)
-			.attr("cx", round(x+w*((vX[i]-Xmin)/(Xmax-Xmin))))
-			.attr("cy", round(y+h*(1-(vY[i]-Ymin)/(Ymax-Ymin))))
-			c++
+			.attr("cx", round(x+w*((vars[id0].data[i]-Xmin)/(Xmax-Xmin))))
+			.attr("cy", round(y+h*(1-(vars[id1].data[i]-Ymin)/(Ymax-Ymin))))
 		}
 	}
-	console.log(length+", "+c)
 }
 
 function stream(svg) {
