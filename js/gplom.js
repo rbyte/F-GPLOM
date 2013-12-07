@@ -1,7 +1,9 @@
 var vars
 var filter = []
+// for each data row, counts how many column filters filter one of its row cells
 var filterMask = []
 var svg
+var sliderColor = 200
 
 function interfaceInit() {
 	console.log("hi console :)")
@@ -45,6 +47,34 @@ function main() {
 		
 		for (var k=0; k<vars[0].data.length; k++)
 			filterMask.push(0)
+		
+		
+		// find min & max in metric data
+		for (var i=0; i<vars.length; i++) {
+			if (vars[i].dataType === "metric") {
+				var max = Number.NEGATIVE_INFINITY
+				var min = Number.POSITIVE_INFINITY
+				for (var k=0; k<vars[i].data.length; k++) {
+					var v = vars[i].data[k]
+					if (typeof v !== "string" && !isNaN(v) && v !== undefined) {
+						if (v > max) max = v
+						if (v < min) min = v
+					}
+				}
+				if (max < min) { // no metric data found
+					min = 0
+					max = 1
+				}
+				if (max-min < 0.0001) { // same as scatterplot border
+					max += 1
+					min -= 1
+				}
+				vars[i].max = max
+				vars[i].min = min
+				console.log(i+": "+min+", "+max)
+			}
+		}
+		
 		
 		draw()
 		
@@ -297,9 +327,6 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 				if (catIdX !== -1) { // histogram
 					drawHistogram(svg, x, y, w, h, catIdX, metricIdY)
 						
-					if (i === vars.length-2) {
-						drawFilterX(svg, x, y+h, w, w*0.1, catIdX)
-					}
 						
 					if (false) {
 					// create new stream from each category
@@ -317,13 +344,15 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 					
 //					if (false)
 					drawScatterplotFormat(svg.append("g").attr("class", "scatterplot"), x, y, w, h,
-						vars[metricIdX].data, vars[metricIdY].data)
+						metricIdX, metricIdY)
 				}
 			}
+			var curVar = catIdX === undefined || catIdX < 0 ? metricIdX : catIdX
+			if (i === vars.length-2) {
+				drawFilterX(svg, x, y, w, h, curVar)
+			}
 			if (k === i) {
-				xTextDiv.append("td").attr("style", xStyle).text(vars[
-					(catIdX === undefined || catIdX < 0 ? metricIdX : catIdX)
-				].name)
+				xTextDiv.append("td").attr("style", xStyle).text(vars[curVar].name)
 			}
 			x += w + wMargin
 		}
@@ -331,6 +360,7 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 			(catIdY === undefined || catIdY < 0 ? metricIdY : catIdY)
 		].name)
 		x = xGlobal
+		drawFilterY(svg, x, y, w, h, (catIdY === undefined || catIdY < 0 ? metricIdY : catIdY))
 		y += h + hMargin
 		metricIdX = undefined
 		catIdX = undefined
@@ -380,7 +410,13 @@ function getFilterRangeFor(varId, aOrB) {
 		if (filter[i].varId === varId)
 			return filter[i][aOrB]
 	}
-	return aOrB === "a" ? 0 : (vars[varId].dictionary.length-1)
+	return aOrB === "a"
+		? (vars[varId].dataType === "metric"
+			? vars[varId].min
+			: 0)
+		: (vars[varId].dataType === "metric"
+			? vars[varId].max
+			: (vars[varId].dictionary.length-1))
 }
 
 function updateFilterMask(varId, plus, newToBeF, aOrB) {
@@ -388,7 +424,7 @@ function updateFilterMask(varId, plus, newToBeF, aOrB) {
 		for (var i=0; i<filterMask.length; i++) {
 			if (typeof vars[varId].data[i] !== "string") {
 				// intricate difference: range max or min included ?
-				if (aOrB === "a") {
+				if (plus) {
 					if (newToBeF.min <= vars[varId].data[i]
 					   && newToBeF.max > vars[varId].data[i])
 					   filterMask[i] += 1
@@ -398,6 +434,8 @@ function updateFilterMask(varId, plus, newToBeF, aOrB) {
 					   filterMask[i] -= 1
 				}
 				console.assert(filterMask[i] >= 0)
+				if (filterMask[i] < 0)
+					filterMask[i] = 0
 			}
 		}
 	} else {
@@ -414,27 +452,31 @@ function updateFilterMask(varId, plus, newToBeF, aOrB) {
 }
 
 function setFilterRangeFor(varId, aOrB, val) {
-	console.assert(val < vars[varId].dictionary.length && val >= 0)
+	var isMetric = vars[varId].dataType === "metric"
+	var low = isMetric ? vars[varId].min : 0
+	var high = isMetric ? vars[varId].max : vars[varId].dictionary.length-1
+	console.assert(val <= high && val >= low)
+	
 	var newToBeF = []
 	for (var i=0; i<filter.length; i++) {
 		if (filter[i].varId === varId) {
 			var oldVal = filter[i][aOrB]
 			filter[i][aOrB] = val
-			if (filter[i].a === 0 && filter[i].b === vars[varId].dictionary.length-1) {
+			if (filter[i].a === low && filter[i].b === high) {
 				filter.splice(i, 1)
 			}
-			newToBeF.min = Math.min(oldVal, val) + (vars[varId].dataType !== "metric" && aOrB === "b" ? 1: 0)
-			newToBeF.max = Math.max(oldVal, val) + (vars[varId].dataType !== "metric" && aOrB === "b" ? 1: 0)
-			
+			newToBeF.min = Math.min(oldVal, val) + (!isMetric && aOrB === "b" ? 1: 0)
+			newToBeF.max = Math.max(oldVal, val) + (!isMetric && aOrB === "b" ? 1: 0)
 			updateFilterMask(varId, aOrB === "a" ? oldVal < val : val < oldVal, newToBeF, aOrB)
 			return
 		}
 	}
 	// create new
-	if ((aOrB === "a" && val !== 0) || (aOrB === "b" && val !== vars[varId].dictionary.length-1)) {
-		var oldVal = aOrB === "a" ? 0 : vars[varId].dictionary.length-1
-		var a = aOrB === "a" ? val : 0
-		var b = aOrB === "b" ? val : vars[varId].dictionary.length-1
+	
+	
+	if ((aOrB === "a" && val !== low) || (aOrB === "b" && val !== high)) {
+		var a = aOrB === "a" ? val : low
+		var b = aOrB === "b" ? val : high
 		
 		filter.push({
 			varId: varId,
@@ -443,82 +485,139 @@ function setFilterRangeFor(varId, aOrB, val) {
 		})
 		
 		// filter: [min, max)
-		newToBeF.min = aOrB === "a" ? 0 : b+1
-		newToBeF.max = aOrB === "a" ? a : vars[varId].dictionary.length
-		updateFilterMask(varId, true, newToBeF)
+		newToBeF.min = aOrB === "a" ? low : b+(isMetric ? 0 : 1)
+		newToBeF.max = aOrB === "a" ? a : high+(isMetric ? 0 : 1)
+		updateFilterMask(varId, true, newToBeF, aOrB)
 	}
 }
 
+var ondrag = d3.behavior.drag().on("drag", function() {
+	// if a === b then the sliders are one width apart!
+	// thus, bSlider pos is actually at b+1!
+	var mouseX = d3.event.x
+	var mouseY = d3.event.y
+	var d3obj = d3.select(this)
+	var tDelay = 200
+	var x = parseFloat(d3obj.attr("_x"))
+	var y = parseFloat(d3obj.attr("_y"))
+	var w = parseFloat(d3obj.attr("_w"))
+	var h = parseFloat(d3obj.attr("_h"))
+	var xOrY = d3obj.attr("xOrY")
+	var isX = xOrY === "x"
+	
+	var varId = parseInt(d3obj.attr("_varId"))
+	var aOrB = d3obj.attr("aOrB")
+	var c = getFilterRangeFor(varId, aOrB)
+	var NaOrB = aOrB === "a" ? "b" : "a"
+	var Nc = getFilterRangeFor(varId, NaOrB)
+	
+
+	if (vars[varId].dataType !== "metric") {
+		var numberOfCat = vars[varId].dictionary.length
+		var barX = w/numberOfCat
+		var barY = h/numberOfCat
+		function transform(trL, aOrB) {
+			d3.select("#fsx"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate("+trL*barX+", 0)")
+			d3.select("#fsy"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate(0, "+trL*barY+")")
+		}
+		var barSize = isX ? barX : barY
+		var pos = (isX ? x : y)+(c+(aOrB === "b" ? 1 : 0))*barSize
+		var p = ((isX ? mouseX : mouseY)-pos)/barSize
+//		console.log(id+", "+dxr)
+		if (p >= 0.5 && ((aOrB === "a" && c < numberOfCat-1) || (aOrB === "b" && c < numberOfCat-1))) {
+			setFilterRangeFor(varId, aOrB, c+1)
+			transform((c+1+ (aOrB === "b" ? 1 : 0)), aOrB)
+			// a must < b
+			if (aOrB === "a" && c+1 >= Nc) {
+				setFilterRangeFor(varId, NaOrB, c+1)
+				transform(c+2, NaOrB)
+			}
+			updateSVG()
+		}
+		if (p <= -0.5 && ((aOrB === "a" && c > 0) || (aOrB === "b" && c > 0))) {
+			setFilterRangeFor(varId, aOrB, c-1)
+			transform((c-1+ (aOrB === "b" ? 1 : 0)), aOrB)
+			// a must < b
+			if (aOrB === "b" && c-1 <= Nc) {
+				setFilterRangeFor(varId, NaOrB, c-1)
+				transform(c-1, NaOrB)
+			}
+			updateSVG()
+		}
+	} else {
+		var p = isX ? (mouseX-x)/w : (mouseY-y)/h
+		p = Math.min(1, p)
+		p = Math.max(0, p)
+		var newFilterVal = vars[varId].min + p* (vars[varId].max - vars[varId].min)
+		setFilterRangeFor(varId, aOrB, newFilterVal)
+		function transform(aOrB) {
+			d3.select("#fsx"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate("+(p*w)+", 0)")
+			d3.select("#fsy"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate(0, "+(p*h)+")")
+		}
+		transform(aOrB)
+		if ((aOrB === "a" && newFilterVal > Nc) || (aOrB === "b" && newFilterVal < Nc)) {
+			setFilterRangeFor(varId, NaOrB, newFilterVal)
+			transform(NaOrB)
+		}
+
+		updateSVG()
+	}
+})
+.on("dragstart", function() {
+	this.isDragged = true
+	d3.select(this).attr("fill", "red")
+})
+.on("dragend", function() {
+	this.isDragged = false
+	d3.select(this).attr("fill", "rgb("+sliderColor+","+sliderColor+","+sliderColor+")")
+})
+
+function drawFilterY(svg, x, y, w, h, varId) {
+	var size = 10
+	var fss = new Array()
+	fss.push(svg
+		.append("path")
+		.attr("class", "filterSlider")
+		.attr("id", "fsya"+varId)
+		.attr("aOrB", "a")
+		.attr("xOrY", "y")
+		.attr("d", "M"+x+","+y+" L"+(x-size)+","+y+" L"+(x-size)+","+(y - size)+" Z")
+	)
+	fss.push(svg.append("path")
+		.attr("class", "filterSlider")
+		.attr("id", "fsyb"+varId)
+		.attr("aOrB", "b")
+		.attr("xOrY", "y")
+		.attr("d", "M"+x+","+y+" L"+(x-size)+","+y+" L"+(x-size)+","+(y + size)+" Z")
+		.attr("transform", "translate(0, "+h+")")
+	)
+	commonSliders(svg, x, y, w, h, varId, fss)
+}
+
 function drawFilterX(svg, x, y, w, h, varId) {
-	var color = 100
+	var size = 10
 	
-//	function pathFor(x,y,w,h)
-	var isDragged = false
-	var ondrag = d3.behavior.drag()
-		.on("drag", function() {
-			// if a === b then the sliders are one width apart!
-			// thus, bSlider pos is actually at b+1!
-			var mouseX = d3.event.x
-			var d3obj = d3.select(this)
-			var x = parseFloat(d3obj.attr("_x"))
-			var y = parseFloat(d3obj.attr("_y"))
-			var w = parseFloat(d3obj.attr("_w"))
-			var h = parseFloat(d3obj.attr("_h"))
-			var varId = parseInt(d3obj.attr("_varId"))
-			var aOrB = d3obj.attr("aOrB")
-			var numberOfCat = vars[varId].dictionary.length
-			var barWidth = w/numberOfCat
-			var id = getFilterRangeFor(varId, aOrB)
-			var other = getFilterRangeFor(varId, aOrB === "a" ? "b" : "a")
-			var posX = x+(id+(aOrB === "b" ? 1 : 0))*barWidth // + (aOrB === "b" ? 1 : 0)
-			var dxr = (mouseX-posX)/barWidth
-	//		console.log(id+", "+dxr)
-			if (dxr >= 0.5 && ((aOrB === "a" && id < numberOfCat-1) || (aOrB === "b" && id < numberOfCat-1))) {
-				setFilterRangeFor(varId, aOrB, id+1)
-				d3obj.attr("transform", "translate("+(id+1+ (aOrB === "b" ? 1 : 0))*barWidth+", 0)")
-				// a must < b
-				if (aOrB === "a" && id+1 >= other) {
-					setFilterRangeFor(varId, "b", id+1)
-					d3.select("#fsxb"+varId).attr("transform", "translate("+(id+2)*barWidth+", 0)")
-				}
-				updateSVG()
-			}
-			if (dxr <= -0.5 && ((aOrB === "a" && id > 0) || (aOrB === "b" && id > 0))) {
-				setFilterRangeFor(varId, aOrB, id-1)
-				d3obj.attr("transform", "translate("+(id-1+ (aOrB === "b" ? 1 : 0))*barWidth+", 0)")
-				// a must < b
-				if (aOrB === "b" && id-1 <= other) {
-					setFilterRangeFor(varId, "a", id-1)
-					d3.select("#fsxa"+varId).attr("transform", "translate("+(id-1)*barWidth+", 0)")
-				}
-				updateSVG()
-			}
-		})
-		.on("dragstart", function() {
-			isDragged = true
-			d3.select(this).attr("fill", "red")
-		})
-		.on("dragend", function() {
-			isDragged = false
-			d3.select(this).attr("fill", "rgb("+color+","+color+","+color+")")
-		})
-	
-	var fss = new Array(2)
-	fss[0] = svg
+	var fss = new Array()
+	fss.push(svg
 		.append("path")
 		.attr("class", "filterSlider")
 		.attr("id", "fsxa"+varId)
 		.attr("aOrB", "a")
-		.attr("d", "M"+x+","+y+" L"+x+","+(y+h)+" L"+(x - h)+","+(y+h)+" Z")
-//		.call(d3.behavior.drag().on("drag", ondrag))
-	
-	fss[1] = svg.append("path")
+		.attr("xOrY", "x")
+		.attr("d", "M"+x+","+(y+h)+" L"+x+","+(y+h+size)+" L"+(x - size)+","+(y+h+size)+" Z")
+	)
+	fss.push(svg.append("path")
 		.attr("class", "filterSlider")
 		.attr("id", "fsxb"+varId)
 		.attr("aOrB", "b")
-		.attr("d", "M"+x+","+y+" L"+x+","+(y+h)+" L"+(x + h)+","+(y+h)+" Z")
+		.attr("xOrY", "x")
+		.attr("d", "M"+x+","+(y+h)+" L"+x+","+(y+h+size)+" L"+(x + size)+","+(y+h+size)+" Z")
 		.attr("transform", "translate("+w+", 0)")
-	
+	)
+	commonSliders(svg, x, y, w, h, varId, fss)
+}
+
+function commonSliders(svg, x, y, w, h, varId, fss) {
 	for (var i=0; i<fss.length; i++)
 		fss[i]
 		.attr("_x", x)
@@ -526,17 +625,16 @@ function drawFilterX(svg, x, y, w, h, varId) {
 		.attr("_w", w)
 		.attr("_h", h)
 		.attr("_varId", varId)
-		.attr("fill", "rgb("+color+","+color+","+color+")")
+		.attr("fill", "rgb("+sliderColor+","+sliderColor+","+sliderColor+")")
 		.on("mouseover", function() {
-			if (!isDragged)
+			if (!this.isDragged)
 				d3.select(this).attr("fill", "red")
 		})
 		.on("mouseout", function() {
-			if (!isDragged)
-				d3.select(this).attr("fill", "rgb("+color+","+color+","+color+")")
+			if (!this.isDragged)
+				d3.select(this).attr("fill", "rgb("+sliderColor+","+sliderColor+","+sliderColor+")")
 		})
 		.call(ondrag)
-	
 }
 
 function getHistogramDataFromVars(catId, metricId, filtered) {
@@ -580,23 +678,6 @@ function getHistogramDataFromVars(catId, metricId, filtered) {
 				}
 			}
 		}
-	return result
-}
-
-function getHeatmapDataFromVars(v1id, v2id) {
-	// init 2D map with count=0
-	var result = new Array(vars[v1id].dictionary.length)
-	for (var i=0; i<result.length; i++) {
-		var inside = new Array(vars[v2id].dictionary.length)
-		for (var k=0; k<inside.length; k++) {
-			inside[k] = 0
-		}
-		result[i] = inside
-	}
-	
-	for (var i=0; i<vars[v1id].data.length; i++)
-		if (typeof vars[v1id].data[i] !== "string" && typeof vars[v2id].data[i] !== "string")
-			result[vars[v1id].data[i]][vars[v2id].data[i]]++
 	return result
 }
 
@@ -669,15 +750,16 @@ function drawHistogram(svg, x, y, w, h, catIdX, metricIdY) {
 			var yyF = y+(h-barHeightFiltered)
 			histG
 				.append("rect")
+				.attr("id", "hist"+catIdX+"x"+metricIdY+"bar"+i)
 				.attr("x", round(xx))
 				.attr("y", round(yyF))
-				.attr("id", "hist"+catIdX+"x"+metricIdY+"bar"+i)
 				.attr("width", round(ww))
 				.attr("height", round(barHeightFiltered))
 				.attr("fill", "url(#lgBlue)")
 
 			histG
 				.append("line")
+				.attr("id", "hist"+catIdX+"x"+metricIdY+"barStroke"+i)
 				.attr("x1", xx).attr("y1", yyF)
 				.attr("x2", xx+ww).attr("y2", yyF)
 				.attr("stroke", "black")
@@ -722,8 +804,16 @@ function updateSVG() {
 //			console.log(barHeightFiltered+", "+yyF)
 			
 			d3.select("#hist"+catIdX+"x"+metricIdY+"bar"+i)
+				.transition()
+				.duration(300)
 				.attr("y", round(yyF))
 				.attr("height", round(barHeightFiltered))
+				
+			d3.select("#hist"+catIdX+"x"+metricIdY+"barStroke"+i)
+				.transition()
+				.duration(300)
+				.attr("y1", yyF)
+				.attr("y2", yyF)
 		}
 	})
 }
@@ -768,6 +858,23 @@ function heatmapTest() {
 	drawHeatmap(svg, 10, 10, 300, 200, input)
 }
 
+function getHeatmapDataFromVars(v1id, v2id) {
+	// init 2D map with count=0
+	var result = new Array(vars[v1id].dictionary.length)
+	for (var i=0; i<result.length; i++) {
+		var inside = new Array(vars[v2id].dictionary.length)
+		for (var k=0; k<inside.length; k++) {
+			inside[k] = 0
+		}
+		result[i] = inside
+	}
+	
+	for (var i=0; i<vars[v1id].data.length; i++)
+		if (typeof vars[v1id].data[i] !== "string" && typeof vars[v2id].data[i] !== "string")
+			result[vars[v1id].data[i]][vars[v2id].data[i]]++
+	return result
+}
+
 function drawHeatmap(svg, x, y, w, h, input) {
 	console.assert(input.length > 0 && input[0].length > 0)
 	var max = input[0][0]
@@ -790,7 +897,7 @@ function drawHeatmap(svg, x, y, w, h, input) {
 			svg
 				.append("rect")
 				.attr("x", round(x+i*ww))
-				.attr("y", round(y+(h-(k+1)*hh)))
+				.attr("y", round(y+k*hh))
 				.attr("width", round(ww))
 				.attr("height", round(hh))
 				.attr("fill", "rgb("+color+","+color+","+color+")")
@@ -809,10 +916,11 @@ function scatter() {
 		dataY.push(Math.random())
 	}
 	
-	drawScatterplotFormat(svg, 10, 10, 100, 200, dataX, dataY)
+	// TODO deprecated
+//	drawScatterplotFormat(svg, 10, 10, 100, 200, dataX, dataY)
 }
 
-function drawScatterplotFormat(svg, x, y, w, h, vXd, vYd) {
+function drawScatterplotFormat(svg, x, y, w, h, id0, id1) {
 	svg
 		.append("rect")
 		.attr("x", x).attr("y", y)
@@ -825,27 +933,28 @@ function drawScatterplotFormat(svg, x, y, w, h, vXd, vYd) {
 		.attr("stroke-width", "1")
 	
 	var maxPointsDisplayed = 50
-	console.assert(vXd.length === vYd.length)
+	console.assert(vars[id0].data.length === vars[id1].data.length)
 	
 	var vX = []
 	var vY = []
 	// cleanup metric data pair
-	for (var i=0; i<Math.max(vXd.length,vYd.length); i++) {
-		if (typeof vXd[i] !== "string"
-			&& typeof vYd[i] !== "string"
-			&& !isNaN(vYd[i])
-			&& !isNaN(vXd[i])
-			&& vYd[i] !== undefined
-			&& vXd[i] !== undefined) {
-				vX.push(vXd[i])
-				vY.push(vYd[i])
+	for (var i=0; i<Math.max(vars[id0].data.length, vars[id1].data.length); i++) {
+		if (	typeof vars[id0].data[i] !== "string"
+			&&	typeof vars[id1].data[i] !== "string"
+			&& !isNaN(vars[id0].data[i])
+			&& !isNaN(vars[id1].data[i])
+			&& vars[id0].data[i] !== undefined
+			&& vars[id1].data[i] !== undefined) {
+				vX.push(vars[id0].data[i])
+				vY.push(vars[id1].data[i])
 		}
 	}
 	
 	var length = vX.length
-	
+	// min & max have to be calc individually for every metric pair
 	var minMax = getMinMax(vX), Xmin = minMax[0], Xmax = minMax[1]
 	var minMax = getMinMax(vY), Ymin = minMax[0], Ymax = minMax[1]
+	
 	if (Xmax-Xmin < 0.0001) {
 		Xmax += 1
 		Xmin -= 1
