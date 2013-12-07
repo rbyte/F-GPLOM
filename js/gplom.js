@@ -517,6 +517,8 @@ var ondrag = d3.behavior.drag().on("drag", function() {
 		var barX = w/numberOfCat
 		var barY = h/numberOfCat
 		function transform(trL, aOrB) {
+			// TODO is is only correct if the w & h of all diagrams is the same!
+			// we would actually need to get w & h from the NxOrY d3 obj
 			d3.select("#fsx"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate("+trL*barX+", 0)")
 			d3.select("#fsy"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate(0, "+trL*barY+")")
 		}
@@ -650,32 +652,6 @@ function getHistogramDataFromVars(catId, metricId, filtered) {
 			} else {
 				if (filterMask[i] === 0)
 					result[vars[catId].data[i]] += vars[metricId].data[i]
-			}
-		}
-	
-	if (false)
-	for (var i=0; i<vars[catId].data.length; i++)
-		if (typeof vars[metricId].data[i] !== "string") {
-			if (!filtered) {
-				result[vars[catId].data[i]] += vars[metricId].data[i]
-			} else {
-				var isFiltered = false
-				for (var f=0; f<filter.length; f++) {
-					var filteredVar = vars[filter[f].varId]
-					var val = filteredVar.data[i]
-					if (filteredVar.dataType !== "metric") {
-						if (val < filter[f].a || val > filter[f].b) {
-							isFiltered = true
-							break
-						}
-					} else {
-						// TODO
-					}
-				}
-				if (!isFiltered) {
-					console.assert(!isNaN(vars[metricId].data[i]))
-					result[vars[catId].data[i]] += vars[metricId].data[i]
-				}
 			}
 		}
 	return result
@@ -937,6 +913,7 @@ function drawScatterplotFormat(svg, x, y, w, h, id0, id1) {
 	
 	var vX = []
 	var vY = []
+	var length = 0
 	// cleanup metric data pair
 	for (var i=0; i<Math.max(vars[id0].data.length, vars[id1].data.length); i++) {
 		if (	typeof vars[id0].data[i] !== "string"
@@ -947,13 +924,17 @@ function drawScatterplotFormat(svg, x, y, w, h, id0, id1) {
 			&& vars[id1].data[i] !== undefined) {
 				vX.push(vars[id0].data[i])
 				vY.push(vars[id1].data[i])
+				length++
+		} else {
+			// this way, the relation to the data indices is not broken
+				vX.push(undefined)
+				vY.push(undefined)
 		}
 	}
 	
-	var length = vX.length
 	// min & max have to be calc individually for every metric pair
-	var minMax = getMinMax(vX), Xmin = minMax[0], Xmax = minMax[1]
-	var minMax = getMinMax(vY), Ymin = minMax[0], Ymax = minMax[1]
+	var minMax = getMinMaxNew(vX), Xmin = minMax[0], Xmax = minMax[1]
+	var minMax = getMinMaxNew(vY), Ymin = minMax[0], Ymax = minMax[1]
 	
 	if (Xmax-Xmin < 0.0001) {
 		Xmax += 1
@@ -963,18 +944,41 @@ function drawScatterplotFormat(svg, x, y, w, h, id0, id1) {
 		Ymax += 1
 		Ymin -= 1
 	}
-	if (length > maxPointsDisplayed)
-		var randomId = uniqueRandomNumbersArray(maxPointsDisplayed, length-1)
 	
-	for (var i=0; i<maxPointsDisplayed && i<length; i++) {
-		var idx = length > maxPointsDisplayed ? randomId[i] : i
-		svg
-		.append("circle")
-		.attr("fill", "url(#g1)")
-		.attr("r", 4)
-		.attr("cx", round(x+w*((vX[idx]-Xmin)/(Xmax-Xmin))))
-		.attr("cy", round(y+h*(1-(vY[idx]-Ymin)/(Ymax-Ymin))))
+	// filter
+	if (length > maxPointsDisplayed) {
+		var randomId = uniqueRandomNumbersArray(maxPointsDisplayed, length-1)
+		
+		randomId.sort(function(a,b) { return a-b })
+		
+		var validCount = 0
+		var rIdI = 0
+		for (var i=0; i<vX.length; i++) {
+			if (vX[i] !== undefined) {
+				if (rIdI < randomId.length && validCount >= randomId[rIdI]) {
+					rIdI++
+				} else {
+					vX[i] = undefined
+					vY[i] = undefined
+				}
+				validCount++
+			}
+		}
 	}
+	
+	var c = 0
+	for (var i=0; i<vX.length; i++) {
+		if (vX[i] !== undefined && vY[i] !== undefined) {
+			svg
+			.append("circle")
+			.attr("fill", "url(#g1)")
+			.attr("r", 4)
+			.attr("cx", round(x+w*((vX[i]-Xmin)/(Xmax-Xmin))))
+			.attr("cy", round(y+h*(1-(vY[i]-Ymin)/(Ymax-Ymin))))
+			c++
+		}
+	}
+	console.log(length+", "+c)
 }
 
 function stream(svg) {
@@ -1048,16 +1052,38 @@ function epanechnikovKernel(scale) {
 
 
 
-
+function getMinMaxNew(input) {
+	if (input.length === 0)
+		return [0,0]
+	var max = undefined
+	var min = undefined
+	for (var i=1; i<input.length; i++) {
+		if (input[i] !== undefined) {
+			if (max === undefined) max = input[i]
+			if (min === undefined) min = input[i]
+			if (input[i] > max) max = input[i]
+			if (input[i] < min) min = input[i]
+		}
+	}
+	if (max === undefined || min === undefined)
+		return [0, 0]
+	return [min, max]
+}
 
 function getMinMax(input) {
 	if (input.length === 0)
 		return [0,0]
 	var max = input[0]
 	var min = input[0]
+//	var max = undefined
+//	var min = undefined
 	for (var i=1; i<input.length; i++) {
-		if (input[i] > max) max = input[i]
-		if (input[i] < min) min = input[i]
+		if (input[i] !== undefined) {
+//			if (max === undefined) max = input[i]
+//			if (min === undefined) min = input[i]
+			if (input[i] > max) max = input[i]
+			if (input[i] < min) min = input[i]
+		}
 	}
 	return [min, max]
 }
