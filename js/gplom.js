@@ -1,7 +1,8 @@
 var vars
 var filter = []
 // for each data row, counts how many column filters filter one of its row cells
-var filterMask = []
+var filterMask
+var highlightMask
 var svg
 var sliderColor = 200
 
@@ -45,9 +46,13 @@ function main() {
 		if (vars.length > numberOfVarsToDraw)
 			vars.splice(numberOfVarsToDraw, vars.length-numberOfVarsToDraw)
 		
-		for (var k=0; k<vars[0].data.length; k++)
-			filterMask.push(0)
-		
+		var dataLength = vars[0].data.length
+		filterMask = new Array(dataLength)
+		highlightMask = new Array(dataLength)
+		for (var k=0; k<dataLength; k++) {
+			filterMask[k] = 0
+			highlightMask[k] = 0
+		}
 		
 		// find min & max in metric data
 		for (var i=0; i<vars.length; i++) {
@@ -71,7 +76,7 @@ function main() {
 				}
 				vars[i].max = max
 				vars[i].min = min
-				console.log(i+": "+min+", "+max)
+//				console.log(i+": "+min+", "+max)
 			}
 		}
 		
@@ -321,13 +326,11 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 			}
 			if (catIdY !== -1) { // heatmap
 				console.assert(catIdX !== -1 && catIdX !== catIdY)
-				drawHeatmap(svg.append("g").attr("class", "heatmap"), x, y, w, h,
-					getHeatmapDataFromVars(catIdX, catIdY))
+				drawHeatmapFirstime(svg, x, y, w, h, catIdX, catIdY)
 			} else {
 				if (catIdX !== -1) { // histogram
 					drawHistogram(svg, x, y, w, h, catIdX, metricIdY)
-						
-						
+					
 					if (false) {
 					// create new stream from each category
 						var catBuckets = []
@@ -418,36 +421,85 @@ function getFilterRangeFor(varId, aOrB) {
 			: (vars[varId].dictionary.length-1))
 }
 
-function updateFilterMask(varId, plus, newToBeF, aOrB) {
+function addToMask(mask, varId) {
+	toMask(mask, true, varId)
+}
+
+function subtractFromMask(mask, varId) {
+	toMask(mask, false, varId)
+}
+
+function toMask(mask, plus, varId) {
+	var isMetric = vars[varId].dataType === "metric"
+	var low = isMetric ? vars[varId].min : 0
+	var high = isMetric ? vars[varId].max : vars[varId].dictionary.length-1
+	
+	var newToBeF = []
+	console.assert(runOnFilterWithVarId(varId, function(i, fi) {
+		if (low === filter[i].a)
+			return
+		newToBeF.min = low
+		newToBeF.max = filter[i].a
+		updateMask(mask, varId, plus, newToBeF)
+	}))
+	console.assert(runOnFilterWithVarId(varId, function(i, fi) {
+		if (high === filter[i].b)
+			return
+		newToBeF.min = filter[i].b+(isMetric ? 0 : 1)
+		newToBeF.max = high+(isMetric ? 0 : 1)
+		updateMask(mask, varId, plus, newToBeF)
+	}))
+}
+
+function updatehighlightMask(varId, plus, newToBeF) {
+	updateMask(highlightMask, varId, plus, newToBeF)
+}
+
+function updateFilterMask(varId, plus, newToBeF) {
+	updateMask(filterMask, varId, plus, newToBeF)
+}
+
+function updateMask(mask, varId, plus, newToBeF) {
 	if (vars[varId].dataType === "metric") {
-		for (var i=0; i<filterMask.length; i++) {
+		for (var i=0; i<mask.length; i++) {
 			if (typeof vars[varId].data[i] !== "string") {
 				// intricate difference: range max or min included ?
 				if (plus) {
 					if (newToBeF.min <= vars[varId].data[i]
 					   && newToBeF.max > vars[varId].data[i])
-					   filterMask[i] += 1
+					   mask[i]++
 				} else {
 					if (newToBeF.min < vars[varId].data[i]
 					   && newToBeF.max >= vars[varId].data[i])
-					   filterMask[i] -= 1
+					   mask[i]--
 				}
-				console.assert(filterMask[i] >= 0)
-				if (filterMask[i] < 0)
-					filterMask[i] = 0
+				console.assert(mask[i] >= 0)
+				if (mask[i] < 0)
+					mask[i] = 0
 			}
 		}
 	} else {
-		for (var i=0; i<filterMask.length; i++) {
+		for (var i=0; i<mask.length; i++) {
 			// filter: [min, max)
 			for (var k=newToBeF.min; k<newToBeF.max; k++) {
 				if (vars[varId].data[i] === k) {
-					filterMask[i] += (plus ? 1 : -1)
-					console.assert(filterMask[i] >= 0)
+					mask[i] += (plus ? 1 : -1)
+					console.assert(mask[i] >= 0)
 				}
 			}
 		}
 	}
+}
+
+function runOnFilterWithVarId(varId, f) {
+	for (var i=0; i<filter.length; i++) {
+		if (filter[i].varId === varId) {
+			f(i, filter[i])
+			return true
+		}
+	}
+	// not found
+	return false
 }
 
 function setFilterRangeFor(varId, aOrB, val) {
@@ -455,38 +507,64 @@ function setFilterRangeFor(varId, aOrB, val) {
 	var low = isMetric ? vars[varId].min : 0
 	var high = isMetric ? vars[varId].max : vars[varId].dictionary.length-1
 	console.assert(val <= high && val >= low)
+	var id = "fLi"+varId
 	
 	var newToBeF = []
-	for (var i=0; i<filter.length; i++) {
-		if (filter[i].varId === varId) {
-			var oldVal = filter[i][aOrB]
-			filter[i][aOrB] = val
-			if (filter[i].a === low && filter[i].b === high) {
-				filter.splice(i, 1)
-			}
-			newToBeF.min = Math.min(oldVal, val) + (!isMetric && aOrB === "b" ? 1: 0)
-			newToBeF.max = Math.max(oldVal, val) + (!isMetric && aOrB === "b" ? 1: 0)
-			updateFilterMask(varId, aOrB === "a" ? oldVal < val : val < oldVal, newToBeF, aOrB)
-			return
+	var found = runOnFilterWithVarId(varId, function(i, fi) {
+		var oldVal = filter[i][aOrB]
+		filter[i][aOrB] = val
+		if (filter[i].a === low && filter[i].b === high) {
+			filter.splice(i, 1)
+			d3.select("#"+id).remove()
 		}
-	}
+		newToBeF.min = Math.min(oldVal, val) + (!isMetric && aOrB === "b" ? 1: 0)
+		newToBeF.max = Math.max(oldVal, val) + (!isMetric && aOrB === "b" ? 1: 0)
+		updatehighlightMask(varId, aOrB === "a" ? oldVal < val : val < oldVal, newToBeF)
+	})
+	
 	// create new
-	
-	
-	if ((aOrB === "a" && val !== low) || (aOrB === "b" && val !== high)) {
+	if (!found && ((aOrB === "a" && val !== low) || (aOrB === "b" && val !== high))) {
 		var a = aOrB === "a" ? val : low
 		var b = aOrB === "b" ? val : high
 		
 		filter.push({
 			varId: varId,
 			a: a,
-			b: b
+			b: b,
+			isApplied: false
 		})
+		
+		var appliedColour = "#faa"
+		var notAppliedColour = "#ddd"
+		
+		d3.select("#filter")
+			.append("li")
+			.attr("id", id)
+			.attr("varId", varId)
+			.text(vars[varId].name)
+			.attr("style", "background-color: "+notAppliedColour+";")
+			.on("click", function(d,i) {
+				var elem = d3.select(this)
+				runOnFilterWithVarId(varId, function() {
+					if (filter[i].isApplied) {
+						filter[i].isApplied = false
+						elem.attr("style", "background-color: "+notAppliedColour+";")
+						subtractFromMask(filterMask, varId)
+						addToMask(highlightMask, varId)
+					} else {
+						filter[i].isApplied = true
+						elem.attr("style", "background-color: "+appliedColour+";")
+						subtractFromMask(highlightMask, varId)
+						addToMask(filterMask, varId)
+					}
+					updateSVG()
+				})
+			})
 		
 		// filter: [min, max)
 		newToBeF.min = aOrB === "a" ? low : b+(isMetric ? 0 : 1)
 		newToBeF.max = aOrB === "a" ? a : high+(isMetric ? 0 : 1)
-		updateFilterMask(varId, true, newToBeF, aOrB)
+		updatehighlightMask(varId, true, newToBeF)
 	}
 }
 
@@ -524,7 +602,6 @@ var ondrag = d3.behavior.drag().on("drag", function() {
 		var barSize = isX ? barX : barY
 		var pos = (isX ? x : y+h)+(isX ? 1 : -1)*(c+(aOrB === "b" ? 1 : 0))*barSize
 		var p = (isX ? 1 : -1)*((isX ? mouseX : mouseY)-pos)/barSize
-		console.log(pos+" , "+p)
 		if (p >= 0.5 && ((aOrB === "a" && c < numberOfCat-1) || (aOrB === "b" && c < numberOfCat-1))) {
 			setFilterRangeFor(varId, aOrB, c+1)
 			transform((c+1+ (aOrB === "b" ? 1 : 0)), aOrB)
@@ -644,13 +721,13 @@ function getHistogramDataFromVars(catId, metricId, filtered) {
 	for (var i=0; i<result.length; i++)
 		result[i] = 0
 	
-//	filterMask
+//	highlightMask
 	for (var i=0; i<vars[catId].data.length; i++)
 		if (typeof vars[metricId].data[i] !== "string") {
 			if (!filtered) {
 				result[vars[catId].data[i]] += vars[metricId].data[i]
 			} else {
-				if (filterMask[i] === 0)
+				if (highlightMask[i] === 0)
 					result[vars[catId].data[i]] += vars[metricId].data[i]
 			}
 		}
@@ -757,8 +834,6 @@ function drawHistogram(svg, x, y, w, h, catIdX, metricIdY) {
 }
 
 function updateSVG() {
-//	console.log(filter)
-	
 	d3.selectAll(".histogram").each(function(d, i) {
 		var hist = d3.select(this)
 		var catIdX = hist.attr("catIdX")
@@ -777,7 +852,6 @@ function updateSVG() {
 			console.assert(!isNaN(inputFiltered[i]))
 			var barHeightFiltered = h*(inputFiltered[i]-baseline)/(max-baseline)
 			var yyF = y+(h-barHeightFiltered)
-//			console.log(barHeightFiltered+", "+yyF)
 			
 			d3.select("#hist"+catIdX+"x"+metricIdY+"bar"+i)
 				.transition()
@@ -805,6 +879,18 @@ function updateSVG() {
 		scatter.remove()
 		
 		drawScatterplotFirsttime(svg, x, y, w, h, id0, id1)
+	})
+	
+	d3.selectAll(".heatmap").each(function(d, i) {
+		var heatmap = d3.select(this)
+		var id0 = heatmap.attr("id0")
+		var id1 = heatmap.attr("id1")
+		var x = parseFloat(heatmap.attr("_x"))
+		var y = parseFloat(heatmap.attr("_y"))
+		var w = parseFloat(heatmap.attr("_w"))
+		var h = parseFloat(heatmap.attr("_h"))
+		
+		updateHeatmap(heatmap, x, y, w, h, id0, id1)
 	})
 }
 
@@ -845,52 +931,92 @@ function heatmapTest() {
 		input.push(inside)
 	}
 	
-	drawHeatmap(svg, 10, 10, 300, 200, input)
+	// TODO deprecated
+//	drawHeatmap(svg, 10, 10, 300, 200, input)
 }
 
-function getHeatmapDataFromVars(v1id, v2id) {
-	// init 2D map with count=0
-	var result = new Array(vars[v1id].dictionary.length)
-	for (var i=0; i<result.length; i++) {
-		var inside = new Array(vars[v2id].dictionary.length)
-		for (var k=0; k<inside.length; k++) {
-			inside[k] = 0
-		}
-		result[i] = inside
-	}
-	
-	for (var i=0; i<vars[v1id].data.length; i++)
-		if (typeof vars[v1id].data[i] !== "string" && typeof vars[v2id].data[i] !== "string")
-			result[vars[v1id].data[i]][vars[v2id].data[i]]++
-	return result
+function drawBorder(svg, x, y, w, h) {
+	var storkeWidth = 0.5
+	svg
+		.append("rect")
+		.attr("x", x-storkeWidth).attr("y", y-storkeWidth)
+		.attr("width", w+2*storkeWidth)
+		.attr("height", h+2*storkeWidth)
+		.attr("fill", "rgb(0,0,0)")
+		.attr("fill-opacity", "0")
+		.attr("stroke", "rgb(0,0,0)")
+		.attr("stroke-opacity", "0.3")
+		.attr("stroke-width", storkeWidth)
 }
 
-function drawHeatmap(svg, x, y, w, h, input) {
-	console.assert(input.length > 0 && input[0].length > 0)
-	var max = input[0][0]
-	var min = input[0][0]
-	var innerLength = input[0].length
-	for (var i=0; i<input.length; i++) {
-		console.assert(innerLength === input[i].length)
+function drawHeatmapFirstime(svg, x, y, w, h, id0, id1) {
+	var heatmap = svg.append("g")
+		.attr("class", "heatmap")
+		.attr("id0", id0)
+		.attr("id1", id1)
+		.attr("_x", round(x))
+		.attr("_y", round(y))
+		.attr("_w", round(w))
+		.attr("_h", round(h))
+	drawBorder(heatmap, x, y, w, h)
+	updateHeatmap(heatmap, x, y, w, h, id0, id1, true)
+}
+
+function updateHeatmap(heatmap, x, y, w, h, id0, id1, firsttime) {
+	var outterLength = vars[id0].dictionary.length
+	var innerLength = vars[id1].dictionary.length
+	console.assert(outterLength > 0 && innerLength > 0)
+	var input = new Array(outterLength)
+	for (var i=0; i<outterLength; i++) {
+		var inside = new Array(innerLength)
 		for (var k=0; k<innerLength; k++) {
-			if (input[i][k] > max) max = input[i][k]
-			if (input[i][k] < min) min = input[i][k]
+			inside[k] = [0,0] // [isNotFiltered, is]
+		}
+		input[i] = inside
+	}
+	
+	for (var i=0; i<vars[id0].data.length; i++)
+		input[vars[id0].data[i]][vars[id1].data[i]][(highlightMask[i] === 0 ? 0 : 1)]++
+	
+	var max = input[0][0][0]+input[0][0][1]
+	var min = max
+	for (var i=0; i<outterLength; i++) {
+		for (var k=0; k<innerLength; k++) {
+			if (input[i][k][0]+input[i][k][1] > max) max = input[i][k][0]+input[i][k][1]
+			if (input[i][k][0]+input[i][k][1] < min) min = input[i][k][0]+input[i][k][1]
 		}
 	}
 	
-	var ww = w/input.length
-	var hh = h/input[0].length
-	for (var i=0; i<input.length; i++) {
+	var ww = w/outterLength
+	var hh = h/innerLength
+	for (var i=0; i<outterLength; i++) {
 		for (var k=0; k<innerLength; k++) {
-			var color = 255-Math.round(input[i][k]/max*255)
-			if (color !== 255)
-			svg
-				.append("rect")
-				.attr("x", round(x+i*ww))
-				.attr("y", round(y+(h-(k+1)*hh)))
-				.attr("width", round(ww))
-				.attr("height", round(hh))
-				.attr("fill", "rgb("+color+","+color+","+color+")")
+			var colorP = (input[i][k][0]+input[i][k][1])/max
+			// percentage non-filtered
+			var satP = colorP === 0 ? 0 : input[i][k][0] / (input[i][k][0] + input[i][k][1])
+			var sat = Math.round((1*satP)*100)
+			// 0.7 because at black, no colour difference is visible anymore
+			var ligthness = Math.round((1-colorP*0.7)*100)
+			var cellId = "hc"+id0+"x"+id1+"x"+i+"x"+k
+			var cell
+			if (firsttime !== undefined) {
+				cell = heatmap
+					.append("rect")
+					.attr("id", cellId) // heatmap cell
+					.attr("x", round(x+i*ww))
+					.attr("y", round(y+(h-(k+1)*hh)))
+					.attr("width", round(ww))
+					.attr("height", round(hh))
+				
+			} else {
+				cell = d3.select("#"+cellId)
+			}
+			cell
+				// TODO does not work in Inkscape .. have to convert
+				// also hue does not match (bases are 256 or 360)
+				// blue
+				.attr("fill", "hsl(200, "+sat+"%, "+ligthness+"%)")
+//				.attr("fill", "rgb("+color*255+","+color*255+","+color*255+")")
 		}
 	}
 }
@@ -920,22 +1046,13 @@ function drawScatterplotFirsttime(svg, x, y, w, h, id0, id1) {
 		.attr("_w", round(w))
 		.attr("_h", round(h))
 	
-	scatter
-		.append("rect")
-		.attr("x", x).attr("y", y)
-		.attr("width", w)
-		.attr("height", h)
-		.attr("fill", "rgb(0,0,0)")
-		.attr("fill-opacity", "0")
-		.attr("stroke", "rgb(0,0,0)")
-		.attr("stroke-opacity", "0.4")
-		.attr("stroke-width", "1")
+	drawBorder(scatter, x, y, w, h)
 	
 	updateScatterplot(scatter, x, y, w, h, id0, id1)
 }
 
 function updateScatterplot(scatter, x, y, w, h, id0, id1) {
-	var maxPointsDisplayed = 500
+	var maxPointsDisplayed = 100
 	console.assert(vars[id0].data.length === vars[id1].data.length)
 	var length = vars[id0].data.length
 	
@@ -964,8 +1081,8 @@ function updateScatterplot(scatter, x, y, w, h, id0, id1) {
 	var Ymin = vars[id1].min, Ymax = vars[id1].max
 	
 	// min & max have to be calc individually for every metric pair
-//	var minMax = getMinMaxNew(vX), Xmin = minMax[0], Xmax = minMax[1]
-//	var minMax = getMinMaxNew(vY), Ymin = minMax[0], Ymax = minMax[1]
+//	var minMax = getMinMax(vX), Xmin = minMax[0], Xmax = minMax[1]
+//	var minMax = getMinMax(vY), Ymin = minMax[0], Ymax = minMax[1]
 	
 	if (Xmax-Xmin < 0.0001) {
 		Xmax += 1
@@ -977,7 +1094,7 @@ function updateScatterplot(scatter, x, y, w, h, id0, id1) {
 	}
 	
 	for (var i=0; i<length; i++) {
-		if (filterMask[i] !== 0) {
+		if (highlightMask[i] !== 0) {
 			if (vX[i]) {
 				goodEntries--
 				vX[i] = false
@@ -1090,39 +1207,25 @@ function epanechnikovKernel(scale) {
 
 
 
-function getMinMaxNew(input) {
+
+function getMinMax(input) {
 	if (input.length === 0)
 		return [0,0]
 	var max = undefined
 	var min = undefined
-	for (var i=1; i<input.length; i++) {
-		if (input[i] !== undefined) {
+	for (var i=0; i<input.length; i++) {
+		if (input[i] !== undefined && input[i] !== null && typeof input[i] !== "string") {
 			if (max === undefined) max = input[i]
 			if (min === undefined) min = input[i]
 			if (input[i] > max) max = input[i]
 			if (input[i] < min) min = input[i]
 		}
 	}
-	if (max === undefined || min === undefined)
-		return [0, 0]
-	return [min, max]
-}
-
-function getMinMax(input) {
-	if (input.length === 0)
+	if (max === undefined || min === undefined || max < min)
 		return [0,0]
-	var max = input[0]
-	var min = input[0]
-//	var max = undefined
-//	var min = undefined
-	for (var i=1; i<input.length; i++) {
-		if (input[i] !== undefined) {
-//			if (max === undefined) max = input[i]
-//			if (min === undefined) min = input[i]
-			if (input[i] > max) max = input[i]
-			if (input[i] < min) min = input[i]
-		}
-	}
+	if (max === min)
+		console.log("max === min")
+	
 	return [min, max]
 }
 

@@ -31,5 +31,8 @@
 		</tr>
 	</table>
 	
+	<ul id="filter">
+	</ul>
+	
 </body>
 </html>

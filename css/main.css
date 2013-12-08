@@ -19,3 +19,15 @@ table, tr, td {
 #yNames td {
 	transform: rotate(-90deg);
 }
+#filter {
+	position: fixed;
+	top: 2%;
+	right: 2%;
+	width: 20%;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+#filter li {
+	padding: 5%;
+}
