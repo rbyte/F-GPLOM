@@ -329,7 +329,7 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 				drawHeatmapFirstime(svg, x, y, w, h, catIdX, catIdY)
 			} else {
 				if (catIdX !== -1) { // histogram
-					drawHistogram(svg, x, y, w, h, catIdX, metricIdY)
+					drawHistogramFirsttime(svg, x, y, w, h, catIdX, metricIdY)
 					
 					if (false) {
 					// create new stream from each category
@@ -743,21 +743,11 @@ function histTest() {
 	for (var i=0; i<10; i++)
 		input.push(Math.random())
 	
-	drawHistogram(svg, 10, 10, 300, 200, input, false)
+	// deprecated
+//	drawHistogram(svg, 10, 10, 300, 200, input, false)
 }
 
-function drawHistogram(svg, x, y, w, h, catIdX, metricIdY) {
-	var input = getHistogramDataFromVars(catIdX, metricIdY, false)
-	var inputFiltered = getHistogramDataFromVars(catIdX, metricIdY, true)
-	
-	var minMax = getMinMax(input), min = minMax[0], max = minMax[1]
-	console.assert(min >= 0)
-	if (max === 0) {
-		max += 1
-	}
-	
-	var baseline = 0
-	
+function drawHistogramFirsttime(svg, x, y, w, h, catIdX, metricIdY) {
 	var histG = svg.append("g")
 		.attr("class", "histogram")
 		.attr("catIdX", catIdX)
@@ -766,70 +756,106 @@ function drawHistogram(svg, x, y, w, h, catIdX, metricIdY) {
 		.attr("_y", round(y))
 		.attr("_w", round(w))
 		.attr("_h", round(h))
-		.attr("_max", max)
-		.attr("_min", min)
+		
+	updateHistogram(histG, x, y, w, h, catIdX, metricIdY, true)
+}
+
+function updateHistogram(histG, x, y, w, h, catId, metricId, firsttime) {
+	var input = new Array(vars[catId].dictionary.length)
+	for (var i=0; i<input.length; i++)
+		input[i] = [0,0]
 	
-	histG
-		.append("line")
-		.attr("x1", x).attr("y1", y+h)
-		.attr("x2", x+w).attr("y2", y+h)
-		.attr("stroke", "gray")
-		.attr("stroke-width", "3")
+	for (var i=0; i<vars[catId].data.length; i++)
+		if (typeof vars[metricId].data[i] !== "string" && filterMask[i] === 0) {
+			input[vars[catId].data[i]][(highlightMask[i] === 0 ? 0 : 1)] += vars[metricId].data[i]
+		}
+	
+//	console.log(input)
+	
+	var max = 0
+	for (var i=0; i<input.length; i++) {
+		max = Math.max(max, input[i][0]+input[i][1])
+	}
+	
+	if (max === 0)
+		max += 1
+	
+	var baseline = 0
 	
 	var ww = 1/input.length*w
 	for (var i=0; i<input.length; i++) {
-		var barHeight = h*(input[i]-baseline)/(max-baseline)
 		var xx = x+i/input.length*w
+		var barHeight = h*(input[i][0]+input[i][1]-baseline)/(max-baseline)
+		var barHeightF = h*(input[i][0]-baseline)/(max-baseline)
 		var yy = y+(h-barHeight)
+		var yyF = y+(h-barHeightF)
 		
-		histG
-			.append("rect")
-			.attr("x", round(xx))
-			.attr("y", round(yy))
-			.attr("width", round(ww))
-			.attr("height", round(barHeight))
-			.attr("fill", "url(#lg1)")
+		var barId = "hist"+catId+"x"+metricId+"bar"+i
+		var strokeId = "hist"+catId+"x"+metricId+"barStroke"+i
+		var barFId = "histH"+catId+"x"+metricId+"bar"+i
+		var strokeFId = "histH"+catId+"x"+metricId+"barStroke"+i
 		
-		histG
-			.append("line")
-			.attr("x1", xx).attr("y1", yy)
-			.attr("x2", xx+ww).attr("y2", yy)
-			.attr("stroke", "black")
-			.attr("stroke-width", "1")
-			
-		// FILTERED
-		if (inputFiltered !== undefined) {
-			var barHeightFiltered = h*(inputFiltered[i]-baseline)/(max-baseline)
-			var yyF = y+(h-barHeightFiltered)
+		if (firsttime !== undefined) {
 			histG
 				.append("rect")
-				.attr("id", "hist"+catIdX+"x"+metricIdY+"bar"+i)
+				.attr("id", barId)
 				.attr("x", round(xx))
-				.attr("y", round(yyF))
 				.attr("width", round(ww))
-				.attr("height", round(barHeightFiltered))
-				.attr("fill", "url(#lgBlue)")
-
+				.attr("fill", "url(#lg1)")
 			histG
 				.append("line")
-				.attr("id", "hist"+catIdX+"x"+metricIdY+"barStroke"+i)
-				.attr("x1", xx).attr("y1", yyF)
-				.attr("x2", xx+ww).attr("y2", yyF)
+				.attr("id", strokeId)
+				.attr("x1", xx)
+				.attr("x2", xx+ww)
+				.attr("stroke", "black")
+				.attr("stroke-width", "1")
+			histG
+				.append("rect")
+				.attr("id", barFId)
+				.attr("x", round(xx))
+				.attr("width", round(ww))
+				.attr("fill", "url(#lgBlue)")
+			histG
+				.append("line")
+				.attr("id", strokeFId)
+				.attr("x1", xx)
+				.attr("x2", xx+ww)
 				.attr("stroke", "black")
 				.attr("stroke-width", "1")
 		}
+		d3.select("#"+barId)
+			.attr("y", round(yy))
+			.attr("height", round(barHeight))
+		d3.select("#"+strokeId)
+			.attr("y1", yy)
+			.attr("y2", yy)
+		d3.select("#"+barFId)
+			.attr("y", round(yyF))
+			.attr("height", round(barHeightF))
+		d3.select("#"+strokeFId)
+			.attr("y1", yyF)
+			.attr("y2", yyF)
 	}
 	
-	var numberOfRulers = 3
-	for (var i=1; i<(numberOfRulers+1); i++) {
-		var yy = y+h-i/(numberOfRulers+1)*h
+	if (firsttime !== undefined) {
+		var numberOfRulers = 3
+		for (var i=1; i<(numberOfRulers+1); i++) {
+			var yy = y+h-i/(numberOfRulers+1)*h
+			histG
+				.append("line")
+				.attr("x1", round(x)).attr("y1", round(yy))
+				.attr("x2", round(x+w)).attr("y2", round(yy))
+				.attr("stroke", "rgb(255,255,255)")
+				.attr("stroke-opacity", "0.5")
+				.attr("stroke-width", "1")
+		}
+		
 		histG
 			.append("line")
-			.attr("x1", round(x)).attr("y1", round(yy))
-			.attr("x2", round(x+w)).attr("y2", round(yy))
-			.attr("stroke", "rgb(255,255,255)")
-			.attr("stroke-opacity", "0.5")
-			.attr("stroke-width", "1")
+			.attr("x1", x).attr("y1", y+h)
+			.attr("x2", x+w).attr("y2", y+h)
+			.attr("stroke", "gray")
+			.attr("stroke-width", "3")
 	}
 }
 
@@ -838,33 +864,12 @@ function updateSVG() {
 		var hist = d3.select(this)
 		var catIdX = hist.attr("catIdX")
 		var metricIdY = hist.attr("metricIdY")
-		
+		var x = parseFloat(hist.attr("_x"))
 		var y = parseFloat(hist.attr("_y"))
+		var w = parseFloat(hist.attr("_w"))
 		var h = parseFloat(hist.attr("_h"))
-		var max = parseFloat(hist.attr("_max"))
 		
-		console.assert(!(isNaN(y) || isNaN(h) || isNaN(max) || typeof y === "string" || typeof h === "string" || typeof max === "string"))
-		
-		var baseline = 0
-		var inputFiltered = getHistogramDataFromVars(catIdX, metricIdY, true)
-		
-		for (var i=0; i<inputFiltered.length; i++) {
-			console.assert(!isNaN(inputFiltered[i]))
-			var barHeightFiltered = h*(inputFiltered[i]-baseline)/(max-baseline)
-			var yyF = y+(h-barHeightFiltered)
-			
-			d3.select("#hist"+catIdX+"x"+metricIdY+"bar"+i)
-				.transition()
-				.duration(300)
-				.attr("y", round(yyF))
-				.attr("height", round(barHeightFiltered))
-				
-			d3.select("#hist"+catIdX+"x"+metricIdY+"barStroke"+i)
-				.transition()
-				.duration(300)
-				.attr("y1", yyF)
-				.attr("y2", yyF)
-		}
+		updateHistogram(hist, x, y, w, h, catIdX, metricIdY)
 	})
 	
 	d3.selectAll(".scatterplot").each(function(d, i) {
@@ -877,7 +882,6 @@ function updateSVG() {
 		var h = parseFloat(scatter.attr("_h"))
 		
 		scatter.remove()
-		
 		drawScatterplotFirsttime(svg, x, y, w, h, id0, id1)
 	})
 	
