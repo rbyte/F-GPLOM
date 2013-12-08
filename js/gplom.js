@@ -251,6 +251,24 @@ function defineGradients(svg) {
 		.attr("stop-color", "rgb(0,0,0)")
 		.attr("stop-opacity", "0")
 		.attr("offset", "100%")
+		
+	var rgradBlue = defs.append("radialGradient")
+		.attr("id", "g1Blue")
+		.attr("cx", "50%")
+		.attr("cy", "50%")
+		.attr("r", "50%")
+	
+	rgradBlue
+		.append("stop")
+		.attr("stop-color", "rgb(0,0,255)")
+		.attr("stop-opacity", "0.5")
+		.attr("offset", "0%")
+	
+	rgradBlue
+		.append("stop")
+		.attr("stop-color", "rgb(0,0,255)")
+		.attr("stop-opacity", "0")
+		.attr("offset", "100%")
 }
 
 
@@ -440,26 +458,26 @@ function toMask(mask, plus, varId) {
 			return
 		newToBeF.min = low
 		newToBeF.max = filter[i].a
-		updateMask(mask, varId, plus, newToBeF)
+		updateMask(varId, plus, newToBeF, mask)
 	}))
 	console.assert(runOnFilterWithVarId(varId, function(i, fi) {
 		if (high === filter[i].b)
 			return
 		newToBeF.min = filter[i].b+(isMetric ? 0 : 1)
 		newToBeF.max = high+(isMetric ? 0 : 1)
-		updateMask(mask, varId, plus, newToBeF)
+		updateMask(varId, plus, newToBeF, mask)
 	}))
 }
 
-function updatehighlightMask(varId, plus, newToBeF) {
-	updateMask(highlightMask, varId, plus, newToBeF)
-}
-
-function updateFilterMask(varId, plus, newToBeF) {
-	updateMask(filterMask, varId, plus, newToBeF)
-}
-
-function updateMask(mask, varId, plus, newToBeF) {
+function updateMask(varId, plus, newToBeF, mask) {
+	if (mask === undefined)
+		runOnFilterWithVarId(varId, function(i, fi) {
+			mask = filter[i].isApplied ? filterMask : highlightMask
+		})
+	// true if the filter has just been removed
+	if (mask === undefined)
+		mask = highlightMask
+	
 	if (vars[varId].dataType === "metric") {
 		for (var i=0; i<mask.length; i++) {
 			if (typeof vars[varId].data[i] !== "string") {
@@ -484,7 +502,10 @@ function updateMask(mask, varId, plus, newToBeF) {
 			for (var k=newToBeF.min; k<newToBeF.max; k++) {
 				if (vars[varId].data[i] === k) {
 					mask[i] += (plus ? 1 : -1)
-					console.assert(mask[i] >= 0)
+					if (mask[i] < 0) {
+						console.log("error: mask[i] < 0")
+						mask[i] = 0
+					}
 				}
 			}
 		}
@@ -519,7 +540,7 @@ function setFilterRangeFor(varId, aOrB, val) {
 		}
 		newToBeF.min = Math.min(oldVal, val) + (!isMetric && aOrB === "b" ? 1: 0)
 		newToBeF.max = Math.max(oldVal, val) + (!isMetric && aOrB === "b" ? 1: 0)
-		updatehighlightMask(varId, aOrB === "a" ? oldVal < val : val < oldVal, newToBeF)
+		updateMask(varId, aOrB === "a" ? oldVal < val : val < oldVal, newToBeF)
 	})
 	
 	// create new
@@ -534,8 +555,8 @@ function setFilterRangeFor(varId, aOrB, val) {
 			isApplied: false
 		})
 		
-		var appliedColour = "#faa"
-		var notAppliedColour = "#ddd"
+		var appliedColour = "#ddd"
+		var notAppliedColour = "#aaf"
 		
 		d3.select("#filter")
 			.append("li")
@@ -545,7 +566,7 @@ function setFilterRangeFor(varId, aOrB, val) {
 			.attr("style", "background-color: "+notAppliedColour+";")
 			.on("click", function(d,i) {
 				var elem = d3.select(this)
-				runOnFilterWithVarId(varId, function() {
+				runOnFilterWithVarId(varId, function(i, fi) {
 					if (filter[i].isApplied) {
 						filter[i].isApplied = false
 						elem.attr("style", "background-color: "+notAppliedColour+";")
@@ -564,7 +585,7 @@ function setFilterRangeFor(varId, aOrB, val) {
 		// filter: [min, max)
 		newToBeF.min = aOrB === "a" ? low : b+(isMetric ? 0 : 1)
 		newToBeF.max = aOrB === "a" ? a : high+(isMetric ? 0 : 1)
-		updatehighlightMask(varId, true, newToBeF)
+		updateMask(varId, true, newToBeF)
 	}
 }
 
@@ -823,18 +844,19 @@ function updateHistogram(histG, x, y, w, h, catId, metricId, firsttime) {
 				.attr("stroke", "black")
 				.attr("stroke-width", "1")
 		}
-		d3.select("#"+barId)
+		var td = firsttime !== undefined ? 0 : 300
+		d3.select("#"+barId).transition().duration(td)
 			.attr("y", round(yy))
 			.attr("height", round(barHeight))
-		d3.select("#"+strokeId)
-			.attr("y1", yy)
-			.attr("y2", yy)
-		d3.select("#"+barFId)
+		d3.select("#"+strokeId).transition().duration(td)
+			.attr("y1", yy-1)
+			.attr("y2", yy-1)
+		d3.select("#"+barFId).transition().duration(td)
 			.attr("y", round(yyF))
 			.attr("height", round(barHeightF))
-		d3.select("#"+strokeFId)
-			.attr("y1", yyF)
-			.attr("y2", yyF)
+		d3.select("#"+strokeFId).transition().duration(td)
+			.attr("y1", yyF-1)
+			.attr("y2", yyF-1)
 	}
 	
 	if (firsttime !== undefined) {
@@ -850,12 +872,14 @@ function updateHistogram(histG, x, y, w, h, catId, metricId, firsttime) {
 				.attr("stroke-width", "1")
 		}
 		
-		histG
-			.append("line")
-			.attr("x1", x).attr("y1", y+h)
-			.attr("x2", x+w).attr("y2", y+h)
-			.attr("stroke", "gray")
-			.attr("stroke-width", "3")
+//		histG
+//			.append("line")
+//			.attr("x1", x)
+//			.attr("y1", y+h+0.5)
+//			.attr("x2", x+w)
+//			.attr("y2", y+h+0.5)
+//			.attr("stroke", "gray")
+//			.attr("stroke-width", "1")
 	}
 }
 
@@ -980,14 +1004,15 @@ function updateHeatmap(heatmap, x, y, w, h, id0, id1, firsttime) {
 	}
 	
 	for (var i=0; i<vars[id0].data.length; i++)
-		input[vars[id0].data[i]][vars[id1].data[i]][(highlightMask[i] === 0 ? 0 : 1)]++
+		if (filterMask[i] === 0)
+			input[vars[id0].data[i]][vars[id1].data[i]][(highlightMask[i] === 0 ? 0 : 1)]++
 	
 	var max = input[0][0][0]+input[0][0][1]
 	var min = max
 	for (var i=0; i<outterLength; i++) {
 		for (var k=0; k<innerLength; k++) {
-			if (input[i][k][0]+input[i][k][1] > max) max = input[i][k][0]+input[i][k][1]
-			if (input[i][k][0]+input[i][k][1] < min) min = input[i][k][0]+input[i][k][1]
+			max = Math.max(max, input[i][k][0]+input[i][k][1])
+			min = Math.min(min, input[i][k][0]+input[i][k][1])
 		}
 	}
 	
@@ -1060,8 +1085,7 @@ function updateScatterplot(scatter, x, y, w, h, id0, id1) {
 	console.assert(vars[id0].data.length === vars[id1].data.length)
 	var length = vars[id0].data.length
 	
-	var vX = new Array(length)
-	var vY = new Array(length)
+	var shown = new Array(length)
 	var goodEntries = 0
 	// cleanup metric data pair
 	for (var i=0; i<length; i++) {
@@ -1071,13 +1095,11 @@ function updateScatterplot(scatter, x, y, w, h, id0, id1) {
 			&& !isNaN(vars[id1].data[i])
 			&& vars[id0].data[i] !== undefined
 			&& vars[id1].data[i] !== undefined) {
-				vX[i] = true
-				vY[i] = true
+				shown[i] = true
 				goodEntries++
 		} else {
 			// this way, the relation to the data indices is not broken
-				vX[i] = false
-				vY[i] = false
+				shown[i] = false
 		}
 	}
 	
@@ -1098,11 +1120,10 @@ function updateScatterplot(scatter, x, y, w, h, id0, id1) {
 	}
 	
 	for (var i=0; i<length; i++) {
-		if (highlightMask[i] !== 0) {
-			if (vX[i]) {
+		if (filterMask[i] !== 0) {
+			if (shown[i]) {
 				goodEntries--
-				vX[i] = false
-				vY[i] = false
+				shown[i] = false
 			}
 		}
 	}
@@ -1115,24 +1136,23 @@ function updateScatterplot(scatter, x, y, w, h, id0, id1) {
 		
 		var validCount = 0
 		var rIdI = 0
-		for (var i=0; i<vX.length; i++) {
-			if (vX[i]) {
+		for (var i=0; i<shown.length; i++) {
+			if (shown[i]) {
 				if (rIdI < randomId.length && validCount >= randomId[rIdI]) {
 					rIdI++
 				} else {
-					vX[i] = false
-					vY[i] = false
+					shown[i] = false
 				}
 				validCount++
 			}
 		}
 	}
 	
-	for (var i=0; i<vX.length; i++) {
-		if (vX[i] && vY[i]) {
+	for (var i=0; i<shown.length; i++) {
+		if (shown[i]) {
 			scatter
 			.append("circle")
-			.attr("fill", "url(#g1)")
+			.attr("fill", highlightMask[i] === 0 ? "url(#g1Blue)" : "url(#g1)")
 			.attr("r", 4)
 			.attr("cx", round(x+w*((vars[id0].data[i]-Xmin)/(Xmax-Xmin))))
 			.attr("cy", round(y+h*(1-(vars[id1].data[i]-Ymin)/(Ymax-Ymin))))
