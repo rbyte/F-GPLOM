@@ -75,8 +75,9 @@ function main() {
 		
 		// restrict number of vars
 		var varsSelected = [1,2,4,5,6,8,9]
+		var allAreSelected = false
 		for (var i=0; i<vars.length; i++) {
-			vars[i].isSelected = varsSelected.indexOf(i) > -1
+			vars[i].isSelected = i < 0 || allAreSelected || varsSelected.indexOf(i) > -1
 		}
 		
 		// fill var selection ul
@@ -88,25 +89,6 @@ function main() {
 			if (vars[i].isSelected)
 				li.attr("class", "selectedVar")
 		}
-		
-//		forAllSelectedVars(function(i) {
-//			console.log(i)
-//		})
-		
-		var foundAll = false
-		if (false)
-			while(!foundAll) {
-				foundAll = true
-				for (var i=0; i<vars.length; i++) {
-					if (!vars[i].isSelected) {
-						vars.splice(i,1)
-						foundAll = false
-						// because splice changes the indices
-						break
-					}
-				}
-			}
-		
 		
 		var svg = d3.select("#viz")
 		defineGradients(svg)
@@ -133,8 +115,6 @@ function main() {
 	
 //	parseData("data/SHIP_2012_D_S2_20121129.json", afterParsingDo)
 	parseDataFast("data/SHIP_2012_D_S2_20121129_improved.json", afterParsingDo)
-	
-//	createTestData(100)
 }
 
 function selVarClick(elem, varId) {
@@ -163,6 +143,8 @@ function onresize(event) {
 	var padding = 0.1 //percent
 	var width = document.body.clientWidth -10
 	var height = window.innerHeight -10
+//	width = 4000
+//	height = 4000
 	var padW = width*padding
 	var padH = height*padding
 	svg
