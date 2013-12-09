@@ -3,7 +3,6 @@ var filter = []
 // for each data row, counts how many column filters filter one of its row cells
 var filterMask
 var highlightMask
-var svg
 var sliderColor = 200
 
 function interfaceInit() {
@@ -93,25 +92,28 @@ function main() {
 }
 
 function draw() {
-	width = 1100
-	height = 830
-//	var width = 4000, height = 4000
-	
-	svg = d3.select("#viz").append("svg")
-		.attr("width", width)
-		.attr("height", height)
-	
-	if (false) svg
-		.append("rect")
-		.attr("x", 0).attr("y", 0)
-		.attr("width", "100%")
-		.attr("height", "100%")
-		.attr("fill", "rgb(0,0,0)")
-		.attr("fill-opacity", "0.03")
-	
+	var svg = d3.select("#viz")
 	defineGradients(svg)
-	padding = 20
-	createGplomMatrix(svg, padding, padding, width-2*padding, height-2*padding)
+	
+	var padding = 0.1 //percent
+	
+	function onresize(event) {
+		var width = document.body.clientWidth -10
+		var height = window.innerHeight -10
+		var padW = width*padding
+		var padH = height*padding
+		svg
+			.attr("width", width)
+			.attr("height", height)
+		
+		d3.select("#gplom").remove()
+		var gplom = svg.append("g").attr("id", "gplom")	
+		createGplomMatrix(gplom, padW/2, padH/2, width-padW, height-padH)
+	}
+	
+	window.onresize = onresize
+	onresize()
+	
 	
 //	stream(svg)
 }
@@ -294,11 +296,10 @@ function defineGradients(svg) {
 
 
 
-
-
 function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 	wGlobal -= 5
 	hGlobal -= 5
+	var textOffset = 25
 	var marginToTotal = 0.2
 	var cardinalityWidthCap = 8
 	var vccc = getTotalCardinalityFrom(cardinalityWidthCap)
@@ -316,10 +317,6 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 	var x = xGlobal, y = yGlobal
 	// on the y-axis, we start with cat no 2
 	var metricIdX, catIdX, metricIdY, catIdY = nextCat()
-	var xTextDiv = d3.select("#xNames")
-	var yTextDiv = d3.select("#yNames")
-	var xStyle = "width: "+round(wGlobal/(vars.length-1))+"px"
-	var yStyle = "height: "+round(hGlobal/(vars.length-1))+"px"
 	
 	// row iteration (y-axis)
 	for (var i=0; i<vars.length-1; i++) {
@@ -367,20 +364,18 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 					drawScatterplotFirsttime(svg, x, y, w, h, metricIdX, metricIdY)
 				}
 			}
-			var curVar = catIdX === undefined || catIdX < 0 ? metricIdX : catIdX
 			if (i === vars.length-2) {
+				var curVar = catIdX === undefined || catIdX < 0 ? metricIdX : catIdX
+				drawText(svg, x+w/2, y+h+textOffset, vars[curVar].name, 10, false)
 				drawFilterX(svg, x, y, w, h, curVar)
-			}
-			if (k === i) {
-				xTextDiv.append("td").attr("style", xStyle).text(vars[curVar].name)
 			}
 			x += w + wMargin
 		}
-		yTextDiv.append("tr").append("td").attr("style", yStyle).text(vars[
-			(catIdY === undefined || catIdY < 0 ? metricIdY : catIdY)
-		].name)
+		
 		x = xGlobal
-		drawFilterY(svg, x, y, w, h, (catIdY === undefined || catIdY < 0 ? metricIdY : catIdY))
+		var curVar = catIdY === undefined || catIdY < 0 ? metricIdY : catIdY
+		drawText(svg, x-textOffset, y+h/2, vars[curVar].name, 10, true)
+		drawFilterY(svg, x, y, w, h, curVar)
 		y += h + hMargin
 		metricIdX = undefined
 		catIdX = undefined
@@ -1212,7 +1207,24 @@ function epanechnikovKernel(scale) {
 	}
 }
 
-
+function drawText(svg, x, y, text, fontSize, vertical) {
+	var textObj = svg.append("text")
+		.attr("style", "fill:#000000;font-family:sans-serif;font-size:"+fontSize+"px;text-anchor:middle;")
+		.attr("x", x)
+		.attr("y", y)
+		.text(text)
+	if (vertical)
+		textObj.attr("transform", "rotate(-90 "+x+" "+y+")")
+	
+	if (false)
+	svg
+		.append("rect")
+		.attr("x", x)
+		.attr("y", y)
+		.attr("width", 3)
+		.attr("height", 3)
+		.attr("fill", "rgb(255,0,0)")
+}
 
 
 

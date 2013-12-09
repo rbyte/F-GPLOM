@@ -2,23 +2,14 @@ body {
 	margin: 0;
 	padding: 0;
 }
-svg {
-	margin: 10px;
+#viz {
+	/*padding: 2%;*/
 }
-table, tr, td {
-	padding: 0;
+
+/*svg {
 	margin: 0;
-	/*border: 1px solid black;*/
-	border-collapse: collapse;
-}
-#xNames, #yNames {
-	font-size: 10px;
-	font-family: sans-serif;
-	text-align: center;
-}
-#yNames td {
-	transform: rotate(-90deg);
-}
+	border: 1px solid rgb(220,220,220);
+}*/
 #filter {
 	position: fixed;
 	top: 2%;

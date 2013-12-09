@@ -13,26 +13,9 @@
 
 <body onload="interfaceInit()">
 	
-	<table id="container">
-		<tr>
-			<td>
-				<table id="yNames">
-				</table>
-			</td>
-			<td id="viz">
-			</td>
-		</tr>
-		<tr>
-			<td></td>
-			<td>
-				<table><tr id="xNames">
-				</tr></table>
-			</td>
-		</tr>
-	</table>
+	<svg id="viz"></svg>
 	
-	<ul id="filter">
-	</ul>
+	<ul id="filter"></ul>
 	
 </body>
 </html>
