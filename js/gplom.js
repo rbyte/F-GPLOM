@@ -3,13 +3,10 @@ var filter = []
 // for each data row, counts how many column filters filter one of its row cells
 var filterMask
 var highlightMask
-var sliderColor = 200
+var sliderColor = 230
 
 function interfaceInit() {
 	console.log("hi console :)")
-//	scatter()
-//	histTest()
-//	heatmapTest()
 	main()
 }
 
@@ -77,7 +74,7 @@ function main() {
 		}
 		
 		// restrict number of vars
-		var varsSelected = [0,1,2,3,4,5,6,7,8,9]
+		var varsSelected = [1,2,4,5,6,8,9]
 		for (var i=0; i<vars.length; i++) {
 			vars[i].isSelected = varsSelected.indexOf(i) > -1
 		}
@@ -92,25 +89,32 @@ function main() {
 				li.attr("class", "selectedVar")
 		}
 		
-		forAllSelectedVars(function(i) {
-			console.log(i)
-		})
+//		forAllSelectedVars(function(i) {
+//			console.log(i)
+//		})
 		
 		var foundAll = false
-		while(!foundAll) {
-			foundAll = true
-			for (var i=0; i<vars.length; i++) {
-				if (!vars[i].isSelected) {
-					vars.splice(i,1)
-					foundAll = false
-					// because splice changes the indices
-					break
+		if (false)
+			while(!foundAll) {
+				foundAll = true
+				for (var i=0; i<vars.length; i++) {
+					if (!vars[i].isSelected) {
+						vars.splice(i,1)
+						foundAll = false
+						// because splice changes the indices
+						break
+					}
 				}
 			}
-		}
 		
 		
-		draw()
+		var svg = d3.select("#viz")
+		defineGradients(svg)
+
+		// browser zoom does not work if this is set
+		if (false)
+			window.onresize = onresize
+		onresize()
 		
 		console.log("done!")
 	}
@@ -124,38 +128,36 @@ function main() {
 function selVarClick(elem, varId) {
 	vars[varId].isSelected = !vars[varId].isSelected
 	d3.select(elem).attr("class", vars[varId].isSelected ? "selectedVar" : null)
+	onresize()
 }
 
 function forAllSelectedVars(f) {
+	var selectedCount = 0
 	for (var i=0; i<vars.length; i++)
 		if (vars[i].isSelected)
-			f(i)
+			f(i, selectedCount++)
 }
 
-function draw() {
+function countSelectedVars() {
+	var count = 0
+	forAllSelectedVars(function(i) {
+		count++
+	})
+	return count
+}
+
+function onresize(event) {
 	var svg = d3.select("#viz")
-	defineGradients(svg)
-	
 	var padding = 0.1 //percent
-	
-	function onresize(event) {
-		var width = document.body.clientWidth -10
-		var height = window.innerHeight -10
-		var padW = width*padding
-		var padH = height*padding
-		svg
-			.attr("width", width)
-			.attr("height", height)
-		
-		createGplomMatrix(svg, padW/2, padH/2, width-padW, height-padH)
-	}
-	
-	// browser zoom does not work if this is set
-	if (false)
-		window.onresize = onresize
-	onresize()
-	
-//	stream(svg)
+	var width = document.body.clientWidth -10
+	var height = window.innerHeight -10
+	var padW = width*padding
+	var padH = height*padding
+	svg
+		.attr("width", width)
+		.attr("height", height)
+
+	createGplomMatrix(svg, padW/2, padH/2, width-padW, height-padH)
 }
 
 function parseData(filename, callback) {
@@ -344,76 +346,46 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 	hGlobal -= 5
 	var textOffset = 25
 	var marginToTotal = 0.2
-	var cardinalityWidthCap = 8
-	var vccc = getTotalCardinalityFrom(cardinalityWidthCap)
-//	var numberOfCatVars = vccc[0]
-//	var totalCardinality = vccc[1]
-//	var totalCardinalityMinusFirst = vccc[2]
-	var wMargin = wGlobal*marginToTotal/(vars.length-2)
-	var hMargin = hGlobal*marginToTotal/(vars.length-2)
+	var countSelVars = countSelectedVars()
+	var wMargin = wGlobal*marginToTotal/(countSelVars-2)
+	var hMargin = hGlobal*marginToTotal/(countSelVars-2)
 	
-	var barWidth = wGlobal*(1-marginToTotal)/(vars.length-1)
-//		*numberOfCatVars/totalCardinality
-	var barHeight = hGlobal*(1-marginToTotal)/(vars.length-1)
-//		*(numberOfCatVars-1)/totalCardinalityMinusFirst
+	var w = wGlobal*(1-marginToTotal)/(countSelVars-1)
+	var h = hGlobal*(1-marginToTotal)/(countSelVars-1)
 	
 	var x = xGlobal, y = yGlobal
 	// on the y-axis, we start with cat no 2
 	var metricIdX, catIdX, metricIdY, catIdY = nextCat()
 	
 	// row iteration (y-axis)
-	for (var i=0; i<vars.length-1; i++) {
+	forAllSelectedVars(function(i, varNo) { if (varNo<countSelVars-1) {
 		catIdY = nextCat(catIdY)
-		var h = barHeight
-		if (catIdY !== -1) { // heatmaps
-//			h = vars[catIdY].dictionary.length * barHeight
-		} else {
-//			h = wGlobal*(1-marginToTotal)/vars.length
+		if (catIdY === -1) {
 			metricIdY = nextMetric(metricIdY)
 			console.assert(metricIdY !== -1)
 		}
 		// column iteration (x-axis)
-		for (var k=0; k<i+1; k++) {
+		forAllSelectedVars(function(k) { if (k<i+1) {
 			catIdX = nextCat(catIdX)
-			var w = barWidth
-			if (catIdX !== -1) {
-				var cardinality = vars[catIdX].dictionary.length
-//				w = (cardinality > cardinalityWidthCap
-//					? cardinalityWidthCap
-//					: cardinality) * barWidth
-			}
 			if (catIdY !== -1) { // heatmap
 				console.assert(catIdX !== -1 && catIdX !== catIdY)
 				drawHeatmapFirstime(gplom, x, y, w, h, catIdX, catIdY)
 			} else {
 				if (catIdX !== -1) { // histogram
 					drawHistogramFirsttime(gplom, x, y, w, h, catIdX, metricIdY)
-					
-					if (false) {
-					// create new stream from each category
-						var catBuckets = []
-						for (var m=0; m<vars[catIdX].dictionary.length; m++)
-							catBuckets.push([])
-						for (var m=0; m<vars[metricIdY].data.length; m++)
-							catBuckets[vars[catIdX].data[m]].push(vars[metricIdY].data[m])
-						for (var m=0; m<vars[catIdX].dictionary.length; m++)
-							drawKDE(gplom.append("g"), x, y, w, h, catBuckets[m])
-					}
 				} else { // scatterplot
 					metricIdX = nextMetric(metricIdX)
 					console.assert(metricIdX !== -1)
-					
-//					if (false)
 					drawScatterplotFirsttime(gplom, x, y, w, h, metricIdX, metricIdY)
 				}
 			}
-			if (i === vars.length-2) {
+			if (varNo === countSelVars-2) {
 				var curVar = catIdX === undefined || catIdX < 0 ? metricIdX : catIdX
 				drawText(gplom, x+w/2, y+h+textOffset, vars[curVar].name, 10, false)
 				drawFilterX(gplom, x, y, w, h, curVar)
 			}
 			x += w + wMargin
-		}
+		}})
 		
 		x = xGlobal
 		var curVar = catIdY === undefined || catIdY < 0 ? metricIdY : catIdY
@@ -422,7 +394,7 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 		y += h + hMargin
 		metricIdX = undefined
 		catIdX = undefined
-	}
+	}})
 }
 
 function nextMetric(current) {
@@ -439,28 +411,11 @@ function next(current, findMetric) {
 	if (current === undefined || current === null)
 		current = -1
 	while (++current < vars.length) {
-		var typeIsMetric = vars[current].dataType === "metric"
-		if ((findMetric && typeIsMetric) || (!findMetric && !typeIsMetric))
+		var isMetric = vars[current].dataType === "metric"
+		if (vars[current].isSelected && ((findMetric && isMetric) || (!findMetric && !isMetric)))
 			return current
 	}
 	return -1
-}
-
-function getTotalCardinalityFrom(cardinalityWidthCap) {
-	var current = undefined
-	var cc = 0
-	var cc0 = 0
-	var vc = 0
-	while ((current = nextCat(current)) !== -1) {
-		vc++
-		var cardinality = vars[current].dictionary.length
-		cc += (cardinality > cardinalityWidthCap
-			? cardinalityWidthCap
-			: cardinality)
-		if (vc === 1)
-			cc0 = cc
-	}
-	return [vc, cc, cc-cc0]
 }
 
 function getFilterRangeFor(varId, aOrB) {
@@ -617,6 +572,7 @@ function setFilterRangeFor(varId, aOrB, val) {
 						addToMask(filterMask, varId)
 					}
 					updateSVG()
+					updateSliderColours(varId)
 				})
 			})
 		
@@ -647,37 +603,36 @@ var ondrag = d3.behavior.drag().on("drag", function() {
 	var NaOrB = aOrB === "a" ? "b" : "a"
 	var Nc = getFilterRangeFor(varId, NaOrB)
 	
-
 	if (vars[varId].dataType !== "metric") {
 		var numberOfCat = vars[varId].dictionary.length
 		var barX = w/numberOfCat
 		var barY = h/numberOfCat
-		function transform(trL, aOrB) {
+		var slide = function (trL, aOrB) {
 			// TODO is is only correct if the w & h of all diagrams is the same!
 			// we would actually need to get w & h from the NxOrY d3 obj
-			d3.select("#fsx"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate("+trL*barX+", 0)")
-			d3.select("#fsy"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate(0, "+(-trL*barY)+")")
+			d3.select("#fsx"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate("+round(trL*barX)+", 0)")
+			d3.select("#fsy"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate(0, "+round(-trL*barY)+")")
 		}
 		var barSize = isX ? barX : barY
 		var pos = (isX ? x : y+h)+(isX ? 1 : -1)*(c+(aOrB === "b" ? 1 : 0))*barSize
 		var p = (isX ? 1 : -1)*((isX ? mouseX : mouseY)-pos)/barSize
 		if (p >= 0.5 && ((aOrB === "a" && c < numberOfCat-1) || (aOrB === "b" && c < numberOfCat-1))) {
 			setFilterRangeFor(varId, aOrB, c+1)
-			transform((c+1+ (aOrB === "b" ? 1 : 0)), aOrB)
+			slide((c+1+ (aOrB === "b" ? 1 : 0)), aOrB)
 			// a must < b
 			if (aOrB === "a" && c+1 >= Nc) {
 				setFilterRangeFor(varId, NaOrB, c+1)
-				transform(c+2, NaOrB)
+				slide(c+2, NaOrB)
 			}
 			updateSVG()
 		}
 		if (p <= -0.5 && ((aOrB === "a" && c > 0) || (aOrB === "b" && c > 0))) {
 			setFilterRangeFor(varId, aOrB, c-1)
-			transform((c-1+ (aOrB === "b" ? 1 : 0)), aOrB)
+			slide((c-1+ (aOrB === "b" ? 1 : 0)), aOrB)
 			// a must < b
 			if (aOrB === "b" && c-1 <= Nc) {
 				setFilterRangeFor(varId, NaOrB, c-1)
-				transform(c-1, NaOrB)
+				slide(c-1, NaOrB)
 			}
 			updateSVG()
 		}
@@ -687,14 +642,14 @@ var ondrag = d3.behavior.drag().on("drag", function() {
 		p = Math.max(0, p)
 		var newFilterVal = vars[varId].min + p* (vars[varId].max - vars[varId].min)
 		setFilterRangeFor(varId, aOrB, newFilterVal)
-		function transform(aOrB) {
-			d3.select("#fsx"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate("+(p*w)+", 0)")
-			d3.select("#fsy"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate(0, "+(-p*h)+")")
+		var slide = function(aOrB) {
+			d3.select("#fsx"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate("+round(p*w)+", 0)")
+			d3.select("#fsy"+aOrB+varId).transition().duration(tDelay).attr("transform", "translate(0, "+round(-p*h)+")")
 		}
-		transform(aOrB)
+		slide(aOrB)
 		if ((aOrB === "a" && newFilterVal > Nc) || (aOrB === "b" && newFilterVal < Nc)) {
 			setFilterRangeFor(varId, NaOrB, newFilterVal)
-			transform(NaOrB)
+			slide(NaOrB)
 		}
 
 		updateSVG()
@@ -702,12 +657,59 @@ var ondrag = d3.behavior.drag().on("drag", function() {
 })
 .on("dragstart", function() {
 	this.isDragged = true
-	d3.select(this).attr("fill", "red")
+	onSliderDragStartOrMouseIn(d3.select(this))
 })
 .on("dragend", function() {
 	this.isDragged = false
-	d3.select(this).attr("fill", "rgb("+sliderColor+","+sliderColor+","+sliderColor+")")
+	onSliderDragEndOrMouseOut(d3.select(this))
 })
+
+function onSliderDragStartOrMouseIn(d3elem) {
+	var colour = "red"
+	d3elem.attr("fill", colour)
+	getSliderBrother(d3elem).attr("fill", colour)
+}
+
+function updateSliderColours(varId) {
+	var elem = d3.select("#fsxa"+varId)
+	if (elem.empty())
+		elem = d3.select("#fsya"+varId)
+	console.assert(!elem.empty())
+	onSliderDragEndOrMouseOut(elem)
+}
+
+function onSliderDragEndOrMouseOut(d3elem) {
+	var varId = parseInt(d3elem.attr("_varId"))
+	var colour
+	if (!runOnFilterWithVarId(varId, function(i, fi) {
+		if (fi.isApplied)
+			colour = "rgb("+0+","+0+","+0+")"
+		else
+			colour = "rgb("+0+","+0+","+255+")"
+	})) {
+		colour = "rgb("+sliderColor+","+sliderColor+","+sliderColor+")"
+	}
+	d3elem.attr("fill", colour)
+	getSliderBrother(d3elem).attr("fill", colour)
+	getSliderSisters(d3elem).attr("fill", colour)
+}
+
+function getSliderBrother(d3elem) {
+	var varId = parseInt(d3elem.attr("_varId"))
+	var aOrB = d3elem.attr("aOrB")
+	var xOrY = d3elem.attr("xOrY")
+	var NxOrY = xOrY === "x" ? "y" : "x"
+	return d3.select("#fs"+NxOrY+aOrB+varId)
+}
+
+function getSliderSisters(d3elem) {
+	var varId = parseInt(d3elem.attr("_varId"))
+	var aOrB = d3elem.attr("aOrB")
+	var xOrY = d3elem.attr("xOrY")
+	var NxOrY = xOrY === "x" ? "y" : "x"
+	var NaOrB = aOrB === "a" ? "b" : "a"
+	return d3.selectAll("#fs"+xOrY+NaOrB+varId+","+"#fs"+NxOrY+NaOrB+varId)
+}
 
 function drawFilterY(svg, x, y, w, h, varId) {
 	var size = 10
@@ -719,15 +721,15 @@ function drawFilterY(svg, x, y, w, h, varId) {
 		.attr("id", "fsya"+varId)
 		.attr("aOrB", "a")
 		.attr("xOrY", "y")
-		.attr("d", "M"+x+","+(y+h)+" L"+(x-size)+","+(y+h)+" L"+(x-size)+","+(y+h + size)+" Z")
+		.attr("d", "M"+round(x)+","+round(y+h)+" L"+round(x-size)+","+round(y+h)+" L"+round(x-size)+","+round(y+h + size)+" Z")
 	)
 	fss.push(svg.append("path")
 		.attr("class", "filterSlider")
 		.attr("id", "fsyb"+varId)
 		.attr("aOrB", "b")
 		.attr("xOrY", "y")
-		.attr("d", "M"+x+","+(y+h)+" L"+(x-size)+","+(y+h)+" L"+(x-size)+","+(y+h - size)+" Z")
-		.attr("transform", "translate(0, "+(-h)+")")
+		.attr("d", "M"+round(x)+","+round(y+h)+" L"+round(x-size)+","+round(y+h)+" L"+round(x-size)+","+round(y+h - size)+" Z")
+		.attr("transform", "translate(0, "+round(-h)+")")
 	)
 	commonSliders(svg, x, y, w, h, varId, fss)
 }
@@ -742,68 +744,40 @@ function drawFilterX(svg, x, y, w, h, varId) {
 		.attr("id", "fsxa"+varId)
 		.attr("aOrB", "a")
 		.attr("xOrY", "x")
-		.attr("d", "M"+x+","+(y+h)+" L"+x+","+(y+h+size)+" L"+(x - size)+","+(y+h+size)+" Z")
+		.attr("d", "M"+round(x)+","+round(y+h)+" L"+x+","+round(y+h+size)+" L"+round(x - size)+","+round(y+h+size)+" Z")
 	)
 	fss.push(svg.append("path")
 		.attr("class", "filterSlider")
 		.attr("id", "fsxb"+varId)
 		.attr("aOrB", "b")
 		.attr("xOrY", "x")
-		.attr("d", "M"+x+","+(y+h)+" L"+x+","+(y+h+size)+" L"+(x + size)+","+(y+h+size)+" Z")
-		.attr("transform", "translate("+w+", 0)")
+		.attr("d", "M"+round(x)+","+round(y+h)+" L"+round(x)+","+round(y+h+size)+" L"+round(x + size)+","+round(y+h+size)+" Z")
+		.attr("transform", "translate("+round(w)+", 0)")
 	)
+	// TODO set transform to wherever the filter [a,b] is set to (if it exists)
 	commonSliders(svg, x, y, w, h, varId, fss)
 }
 
 function commonSliders(svg, x, y, w, h, varId, fss) {
-	for (var i=0; i<fss.length; i++)
+	for (var i=0; i<fss.length; i++) {
 		fss[i]
-		.attr("_x", x)
-		.attr("_y", y)
-		.attr("_w", w)
-		.attr("_h", h)
+		.attr("_x", round(x))
+		.attr("_y", round(y))
+		.attr("_w", round(w))
+		.attr("_h", round(h))
 		.attr("_varId", varId)
-		.attr("fill", "rgb("+sliderColor+","+sliderColor+","+sliderColor+")")
+//		.attr("fill", "rgb("+sliderColor+","+sliderColor+","+sliderColor+")")
 		.on("mouseover", function() {
 			if (!this.isDragged)
-				d3.select(this).attr("fill", "red")
+				onSliderDragStartOrMouseIn(d3.select(this))
 		})
 		.on("mouseout", function() {
 			if (!this.isDragged)
-				d3.select(this).attr("fill", "rgb("+sliderColor+","+sliderColor+","+sliderColor+")")
+				onSliderDragEndOrMouseOut(d3.select(this))
 		})
 		.call(ondrag)
-}
-
-function getHistogramDataFromVars(catId, metricId, filtered) {
-	var result = new Array(vars[catId].dictionary.length)
-	for (var i=0; i<result.length; i++)
-		result[i] = 0
-	
-//	highlightMask
-	for (var i=0; i<vars[catId].data.length; i++)
-		if (typeof vars[metricId].data[i] !== "string") {
-			if (!filtered) {
-				result[vars[catId].data[i]] += vars[metricId].data[i]
-			} else {
-				if (highlightMask[i] === 0)
-					result[vars[catId].data[i]] += vars[metricId].data[i]
-			}
-		}
-	return result
-}
-
-function histTest() {
-	var svg = d3.select("#viz")
-		.attr("width", 960)
-		.attr("height", 500)
-	
-	var input = []
-	for (var i=0; i<10; i++)
-		input.push(Math.random())
-	
-	// deprecated
-//	drawHistogram(svg, 10, 10, 300, 200, input, false)
+		onSliderDragEndOrMouseOut(fss[i])
+	}
 }
 
 function drawHistogramFirsttime(svg, x, y, w, h, catIdX, metricIdY) {
@@ -845,7 +819,7 @@ function updateHistogram(histG, x, y, w, h, catId, metricId, firsttime) {
 	for (var i=0; i<input.length; i++) {
 		var xx = x+i/input.length*w
 		var barHeight = h*(input[i][0]+input[i][1]-baseline)/(max-baseline)
-		var barHeightF = h*(input[i][0]-baseline)/(max-baseline)
+		var barHeightF = !somethingIsHighlighted() ? 0 : h*(input[i][0]-baseline)/(max-baseline)
 		var yy = y+(h-barHeight)
 		var yyF = y+(h-barHeightF)
 		
@@ -943,8 +917,9 @@ function updateSVG() {
 		var w = parseFloat(scatter.attr("_w"))
 		var h = parseFloat(scatter.attr("_h"))
 		
+		var gplom = d3.select(this.parentNode)
 		scatter.remove()
-		drawScatterplotFirsttime(svg, x, y, w, h, id0, id1)
+		drawScatterplotFirsttime(gplom, x, y, w, h, id0, id1)
 	})
 	
 	d3.selectAll(".heatmap").each(function(d, i) {
@@ -982,23 +957,6 @@ function drawKDE(svg, x, y, w, h, input) {
 		.attr("fill", "transparent")
 		.attr("stroke", "gray")
 		.attr("stroke-width", "3")
-}
-
-function heatmapTest() {
-	var svg = d3.select("#viz")
-		.attr("width", 960)
-		.attr("height", 500)
-
-	var input = []
-	for (var i=0; i<10; i++) {
-		var inside = []
-		for (var k=0; k<10; k++)
-			inside.push(Math.random())
-		input.push(inside)
-	}
-	
-	// TODO deprecated
-//	drawHeatmap(svg, 10, 10, 300, 200, input)
 }
 
 function drawBorder(svg, x, y, w, h) {
@@ -1060,7 +1018,7 @@ function updateHeatmap(heatmap, x, y, w, h, id0, id1, firsttime) {
 		for (var k=0; k<innerLength; k++) {
 			var colorP = (input[i][k][0]+input[i][k][1])/max
 			// percentage non-filtered
-			var satP = colorP === 0 ? 0 : input[i][k][0] / (input[i][k][0] + input[i][k][1])
+			var satP = colorP === 0 || !somethingIsHighlighted() ? 0 : input[i][k][0] / (input[i][k][0] + input[i][k][1])
 			var sat = Math.round((1*satP)*100)
 			// 0.7 because at black, no colour difference is visible anymore
 			var ligthness = Math.round((1-colorP*0.7)*100)
@@ -1086,21 +1044,6 @@ function updateHeatmap(heatmap, x, y, w, h, id0, id1, firsttime) {
 //				.attr("fill", "rgb("+color*255+","+color*255+","+color*255+")")
 		}
 	}
-}
-
-function scatter() {
-	var svg = d3.select("#viz")
-		.attr("width", 960)
-		.attr("height", 500)
-	
-	var dataX = [], dataY = []
-	for (var i=0; i<200; i++) {
-		dataX.push(Math.random())
-		dataY.push(Math.random())
-	}
-	
-	// TODO deprecated
-//	drawScatterplotFormat(svg, 10, 10, 100, 200, dataX, dataY)
 }
 
 function drawScatterplotFirsttime(svg, x, y, w, h, id0, id1) {
@@ -1144,10 +1087,6 @@ function updateScatterplot(scatter, x, y, w, h, id0, id1) {
 	var Xmin = vars[id0].min, Xmax = vars[id0].max
 	var Ymin = vars[id1].min, Ymax = vars[id1].max
 	
-	// min & max have to be calc individually for every metric pair
-//	var minMax = getMinMax(vX), Xmin = minMax[0], Xmax = minMax[1]
-//	var minMax = getMinMax(vY), Ymin = minMax[0], Ymax = minMax[1]
-	
 	if (Xmax-Xmin < 0.0001) {
 		Xmax += 1
 		Xmin -= 1
@@ -1190,7 +1129,7 @@ function updateScatterplot(scatter, x, y, w, h, id0, id1) {
 		if (shown[i]) {
 			scatter
 			.append("circle")
-			.attr("fill", highlightMask[i] === 0 ? "url(#g1Blue)" : "url(#g1)")
+			.attr("fill", highlightMask[i] === 0 && somethingIsHighlighted() ? "url(#g1Blue)" : "url(#g1)")
 			.attr("r", 4)
 			.attr("cx", round(x+w*((vars[id0].data[i]-Xmin)/(Xmax-Xmin))))
 			.attr("cy", round(y+h*(1-(vars[id1].data[i]-Ymin)/(Ymax-Ymin))))
@@ -1253,11 +1192,11 @@ function epanechnikovKernel(scale) {
 function drawText(svg, x, y, text, fontSize, vertical) {
 	var textObj = svg.append("text")
 		.attr("style", "fill:#000000;font-family:sans-serif;font-size:"+fontSize+"px;text-anchor:middle;")
-		.attr("x", x)
-		.attr("y", y)
+		.attr("x", round(x))
+		.attr("y", round(y))
 		.text(text)
 	if (vertical)
-		textObj.attr("transform", "rotate(-90 "+x+" "+y+")")
+		textObj.attr("transform", "rotate(-90 "+round(x)+" "+round(y)+")")
 	
 	if (false)
 	svg
@@ -1285,7 +1224,13 @@ function drawText(svg, x, y, text, fontSize, vertical) {
 
 
 
-
+function somethingIsHighlighted() {
+	for (var i=0; i<filter.length; i++) {
+		if (!filter[i].isApplied)
+			return true
+	}
+	return false
+}
 
 function getMinMax(input) {
 	if (input.length === 0)
@@ -1306,19 +1251,6 @@ function getMinMax(input) {
 		console.log("max === min")
 	
 	return [min, max]
-}
-
-function flowText(svg, x, y, w, h, text) {
-	// does not work. if I put the same svg block into the html, it works. do not know why.
-	var switchObj = svg.append("switch")
-	switchObj
-		.append("foreignObject")
-//		.attr("x", x).attr("y", y)
-		.attr("requiredFeatures", "http://www.w3.org/TR/SVG11/feature#Extensibility")
-		.attr("width", w).attr("height", h)
-		.append("p")
-		.attr("xmlns", "http://www.w3.org/1999/xhtml")
-		.text("Text goes here ok so i have along line of text and i expect it to be wrapped now")
 }
 
 function convertStrToNumber(val) {
@@ -1349,11 +1281,8 @@ function uniqueRandomNumbersArray(length, rangeMax) {
 }
 
 function round(number) {
-//	if (typeof number === "")
-
 	return Number(number.toFixed(1))
 }
-
 
 function createTestData(numberOfRows) {
 	vars = [
@@ -1364,7 +1293,7 @@ function createTestData(numberOfRows) {
 		{name:"v5", dataType:"metric", dictionary:[0, 100], data:[]}
 	]
 	
-	for (var i=0; i<vars.length; i++) {
+	forAllSelectedVars(function(i) {
 		var row = []
 		for (var k=0; k<numberOfRows; k++) {
 			if (vars[i].dataType === "metric") {
@@ -1377,6 +1306,6 @@ function createTestData(numberOfRows) {
 			}
 		}
 		vars[i].data = row
-	}
+	})
 }
 
