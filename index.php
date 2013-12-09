@@ -14,8 +14,11 @@
 <body onload="interfaceInit()">
 	
 	<svg id="viz"></svg>
-	
 	<ul id="filter"></ul>
+	<div id="varSelection">
+		<span class="helperSpanToAlignImageVertically"></span>+
+		<ul id="varSelectionUL"></ul>
+	</div>
 	
 </body>
 </html>

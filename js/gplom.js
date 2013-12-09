@@ -41,10 +41,7 @@ function main() {
 			document.write(JSON.stringify(vars))
 		}
 		
-		var numberOfVarsToDraw = 10
-		if (vars.length > numberOfVarsToDraw)
-			vars.splice(numberOfVarsToDraw, vars.length-numberOfVarsToDraw)
-		
+		// setup masks
 		var dataLength = vars[0].data.length
 		filterMask = new Array(dataLength)
 		highlightMask = new Array(dataLength)
@@ -79,6 +76,39 @@ function main() {
 			}
 		}
 		
+		// restrict number of vars
+		var varsSelected = [0,1,2,3,4,5,6,7,8,9]
+		for (var i=0; i<vars.length; i++) {
+			vars[i].isSelected = varsSelected.indexOf(i) > -1
+		}
+		
+		// fill var selection ul
+		var varSelUL = d3.select("#varSelectionUL")
+		for (var i=0; i<vars.length; i++) {
+			var li = varSelUL.append("li")
+				.attr("onclick", "selVarClick(this, "+i+")")
+				.text(vars[i].name)
+			if (vars[i].isSelected)
+				li.attr("class", "selectedVar")
+		}
+		
+		forAllSelectedVars(function(i) {
+			console.log(i)
+		})
+		
+		var foundAll = false
+		while(!foundAll) {
+			foundAll = true
+			for (var i=0; i<vars.length; i++) {
+				if (!vars[i].isSelected) {
+					vars.splice(i,1)
+					foundAll = false
+					// because splice changes the indices
+					break
+				}
+			}
+		}
+		
 		
 		draw()
 		
@@ -89,6 +119,17 @@ function main() {
 	parseDataFast("data/SHIP_2012_D_S2_20121129_improved.json", afterParsingDo)
 	
 //	createTestData(100)
+}
+
+function selVarClick(elem, varId) {
+	vars[varId].isSelected = !vars[varId].isSelected
+	d3.select(elem).attr("class", vars[varId].isSelected ? "selectedVar" : null)
+}
+
+function forAllSelectedVars(f) {
+	for (var i=0; i<vars.length; i++)
+		if (vars[i].isSelected)
+			f(i)
 }
 
 function draw() {
@@ -106,14 +147,13 @@ function draw() {
 			.attr("width", width)
 			.attr("height", height)
 		
-		d3.select("#gplom").remove()
-		var gplom = svg.append("g").attr("id", "gplom")	
-		createGplomMatrix(gplom, padW/2, padH/2, width-padW, height-padH)
+		createGplomMatrix(svg, padW/2, padH/2, width-padW, height-padH)
 	}
 	
-	window.onresize = onresize
+	// browser zoom does not work if this is set
+	if (false)
+		window.onresize = onresize
 	onresize()
-	
 	
 //	stream(svg)
 }
@@ -297,6 +337,9 @@ function defineGradients(svg) {
 
 
 function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
+	d3.select("#gplom").remove()
+	var gplom = svg.append("g").attr("id", "gplom")	
+	
 	wGlobal -= 5
 	hGlobal -= 5
 	var textOffset = 25
@@ -341,10 +384,10 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 			}
 			if (catIdY !== -1) { // heatmap
 				console.assert(catIdX !== -1 && catIdX !== catIdY)
-				drawHeatmapFirstime(svg, x, y, w, h, catIdX, catIdY)
+				drawHeatmapFirstime(gplom, x, y, w, h, catIdX, catIdY)
 			} else {
 				if (catIdX !== -1) { // histogram
-					drawHistogramFirsttime(svg, x, y, w, h, catIdX, metricIdY)
+					drawHistogramFirsttime(gplom, x, y, w, h, catIdX, metricIdY)
 					
 					if (false) {
 					// create new stream from each category
@@ -354,28 +397,28 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 						for (var m=0; m<vars[metricIdY].data.length; m++)
 							catBuckets[vars[catIdX].data[m]].push(vars[metricIdY].data[m])
 						for (var m=0; m<vars[catIdX].dictionary.length; m++)
-							drawKDE(svg.append("g"), x, y, w, h, catBuckets[m])
+							drawKDE(gplom.append("g"), x, y, w, h, catBuckets[m])
 					}
 				} else { // scatterplot
 					metricIdX = nextMetric(metricIdX)
 					console.assert(metricIdX !== -1)
 					
 //					if (false)
-					drawScatterplotFirsttime(svg, x, y, w, h, metricIdX, metricIdY)
+					drawScatterplotFirsttime(gplom, x, y, w, h, metricIdX, metricIdY)
 				}
 			}
 			if (i === vars.length-2) {
 				var curVar = catIdX === undefined || catIdX < 0 ? metricIdX : catIdX
-				drawText(svg, x+w/2, y+h+textOffset, vars[curVar].name, 10, false)
-				drawFilterX(svg, x, y, w, h, curVar)
+				drawText(gplom, x+w/2, y+h+textOffset, vars[curVar].name, 10, false)
+				drawFilterX(gplom, x, y, w, h, curVar)
 			}
 			x += w + wMargin
 		}
 		
 		x = xGlobal
 		var curVar = catIdY === undefined || catIdY < 0 ? metricIdY : catIdY
-		drawText(svg, x-textOffset, y+h/2, vars[curVar].name, 10, true)
-		drawFilterY(svg, x, y, w, h, curVar)
+		drawText(gplom, x-textOffset, y+h/2, vars[curVar].name, 10, true)
+		drawFilterY(gplom, x, y, w, h, curVar)
 		y += h + hMargin
 		metricIdX = undefined
 		catIdX = undefined
