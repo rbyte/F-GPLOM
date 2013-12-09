@@ -116,6 +116,18 @@ function main() {
 			window.onresize = onresize
 		onresize()
 		
+		function openSVG() {
+			window.open("data:image/svg+xml," + encodeURIComponent(
+				document.getElementById("vizWrapper").innerHTML
+			))
+		}
+		
+		document.addEventListener("keydown", function (evt) {
+			switch(evt.keyCode) {
+				case 83: openSVG(); break // s
+			}
+		}, false)
+		
 		console.log("done!")
 	}
 	
@@ -381,7 +393,7 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 			}
 			if (varNo === countSelVars-2) {
 				var curVar = catIdX === undefined || catIdX < 0 ? metricIdX : catIdX
-				drawText(gplom, x+w/2, y+h+textOffset, vars[curVar].name, 10, false)
+				drawText(gplom, x+w/2, y+h+textOffset, vars[curVar].name, 10, false, vars[curVar].detail)
 				drawFilterX(gplom, x, y, w, h, curVar)
 			}
 			x += w + wMargin
@@ -389,7 +401,7 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 		
 		x = xGlobal
 		var curVar = catIdY === undefined || catIdY < 0 ? metricIdY : catIdY
-		drawText(gplom, x-textOffset, y+h/2, vars[curVar].name, 10, true)
+		drawText(gplom, x-textOffset, y+h/2, vars[curVar].name, 10, true, vars[curVar].detail)
 		drawFilterY(gplom, x, y, w, h, curVar)
 		y += h + hMargin
 		metricIdX = undefined
@@ -744,7 +756,7 @@ function drawFilterX(svg, x, y, w, h, varId) {
 		.attr("id", "fsxa"+varId)
 		.attr("aOrB", "a")
 		.attr("xOrY", "x")
-		.attr("d", "M"+round(x)+","+round(y+h)+" L"+x+","+round(y+h+size)+" L"+round(x - size)+","+round(y+h+size)+" Z")
+		.attr("d", "M"+round(x)+","+round(y+h)+" L"+round(x)+","+round(y+h+size)+" L"+round(x - size)+","+round(y+h+size)+" Z")
 	)
 	fss.push(svg.append("path")
 		.attr("class", "filterSlider")
@@ -838,8 +850,8 @@ function updateHistogram(histG, x, y, w, h, catId, metricId, firsttime) {
 			histG
 				.append("line")
 				.attr("id", strokeId)
-				.attr("x1", xx)
-				.attr("x2", xx+ww)
+				.attr("x1", round(xx))
+				.attr("x2", round(xx+ww))
 				.attr("stroke", "black")
 				.attr("stroke-width", "1")
 			histG
@@ -851,8 +863,8 @@ function updateHistogram(histG, x, y, w, h, catId, metricId, firsttime) {
 			histG
 				.append("line")
 				.attr("id", strokeFId)
-				.attr("x1", xx)
-				.attr("x2", xx+ww)
+				.attr("x1", round(xx))
+				.attr("x2", round(xx+ww))
 				.attr("stroke", "black")
 				.attr("stroke-width", "1")
 		}
@@ -860,15 +872,17 @@ function updateHistogram(histG, x, y, w, h, catId, metricId, firsttime) {
 		d3.select("#"+barId).transition().duration(td)
 			.attr("y", round(yy))
 			.attr("height", round(barHeight))
+			.attr("title", vars[catId].dictionary[i]+": "+round(input[i][0]+input[i][1]))
 		d3.select("#"+strokeId).transition().duration(td)
-			.attr("y1", yy-1)
-			.attr("y2", yy-1)
+			.attr("y1", round(yy-1))
+			.attr("y2", round(yy-1))
 		d3.select("#"+barFId).transition().duration(td)
 			.attr("y", round(yyF))
 			.attr("height", round(barHeightF))
+			.attr("title", vars[catId].dictionary[i]+": "+round(input[i][0]))
 		d3.select("#"+strokeFId).transition().duration(td)
-			.attr("y1", yyF-1)
-			.attr("y2", yyF-1)
+			.attr("y1", round(yyF-1))
+			.attr("y2", round(yyF-1))
 	}
 	
 	if (firsttime !== undefined) {
@@ -963,9 +977,10 @@ function drawBorder(svg, x, y, w, h) {
 	var storkeWidth = 0.5
 	svg
 		.append("rect")
-		.attr("x", x-storkeWidth).attr("y", y-storkeWidth)
-		.attr("width", w+2*storkeWidth)
-		.attr("height", h+2*storkeWidth)
+		.attr("x", round(x-storkeWidth))
+		.attr("y", round(y-storkeWidth))
+		.attr("width", round(w+2*storkeWidth))
+		.attr("height", round(h+2*storkeWidth))
 		.attr("fill", "rgb(0,0,0)")
 		.attr("fill-opacity", "0")
 		.attr("stroke", "rgb(0,0,0)")
@@ -1016,12 +1031,6 @@ function updateHeatmap(heatmap, x, y, w, h, id0, id1, firsttime) {
 	var hh = h/innerLength
 	for (var i=0; i<outterLength; i++) {
 		for (var k=0; k<innerLength; k++) {
-			var colorP = (input[i][k][0]+input[i][k][1])/max
-			// percentage non-filtered
-			var satP = colorP === 0 || !somethingIsHighlighted() ? 0 : input[i][k][0] / (input[i][k][0] + input[i][k][1])
-			var sat = Math.round((1*satP)*100)
-			// 0.7 because at black, no colour difference is visible anymore
-			var ligthness = Math.round((1-colorP*0.7)*100)
 			var cellId = "hc"+id0+"x"+id1+"x"+i+"x"+k
 			var cell
 			if (firsttime !== undefined) {
@@ -1036,12 +1045,26 @@ function updateHeatmap(heatmap, x, y, w, h, id0, id1, firsttime) {
 			} else {
 				cell = d3.select("#"+cellId)
 			}
-			cell
-				// TODO does not work in Inkscape .. have to convert
-				// also hue does not match (bases are 256 or 360)
-				// blue
-				.attr("fill", "hsl(200, "+sat+"%, "+ligthness+"%)")
-//				.attr("fill", "rgb("+color*255+","+color*255+","+color*255+")")
+			cell.attr("title", vars[id0].dictionary[i]+" x "+vars[id1].dictionary[k]
+				+": "+round(input[i][k][0]+input[i][k][1]))
+			
+			var colorP = (input[i][k][0]+input[i][k][1])/max
+			// percentage non-filtered
+			var satP = colorP === 0 || !somethingIsHighlighted() ? 0 : input[i][k][0] / (input[i][k][0] + input[i][k][1])
+			
+			// blue
+			// 0.7 because at black, no colour difference is visible anymore
+			// Inkscape only supports rgb encoding inside the svg
+			var rgb = hslToRgb(200/360, satP, (1-colorP*0.7))
+			
+//			var sat = Math.round((1*satP)*100)
+//			var ligthness = Math.round((1-colorP*0.7)*100)
+//			var colour = "hsl(200, "+sat+"%, "+ligthness+"%)"
+			var colour = "rgb("+rgb.r+","+rgb.g+","+rgb.b+")"
+			if (firsttime === undefined)
+				cell.transition().duration(300).attr("fill", colour)
+			else
+				cell.attr("fill", colour)
 		}
 	}
 }
@@ -1133,6 +1156,7 @@ function updateScatterplot(scatter, x, y, w, h, id0, id1) {
 			.attr("r", 4)
 			.attr("cx", round(x+w*((vars[id0].data[i]-Xmin)/(Xmax-Xmin))))
 			.attr("cy", round(y+h*(1-(vars[id1].data[i]-Ymin)/(Ymax-Ymin))))
+			.attr("title", round(vars[id0].data[i])+", "+round(vars[id1].data[i]))
 		}
 	}
 }
@@ -1189,14 +1213,17 @@ function epanechnikovKernel(scale) {
 	}
 }
 
-function drawText(svg, x, y, text, fontSize, vertical) {
+function drawText(svg, x, y, text, fontSize, vertical, title) {
 	var textObj = svg.append("text")
 		.attr("style", "fill:#000000;font-family:sans-serif;font-size:"+fontSize+"px;text-anchor:middle;")
 		.attr("x", round(x))
 		.attr("y", round(y))
 		.text(text)
+		
 	if (vertical)
 		textObj.attr("transform", "rotate(-90 "+round(x)+" "+round(y)+")")
+	if (title !== undefined)
+		textObj.attr("title", title)
 	
 	if (false)
 	svg
@@ -1309,3 +1336,32 @@ function createTestData(numberOfRows) {
 	})
 }
 
+// http://stackoverflow.com/questions/2353211/hsl-to-rgb-color-conversion
+function hslToRgb(h, s, l){
+    var r, g, b
+	
+    if (s === 0 || l === 1 || l === 0) {
+        r = g = b = l // achromatic
+    } else {
+        function hue2rgb(p, q, t){
+            if(t < 0) t += 1
+            if(t > 1) t -= 1
+            if(t < 1/6) return p + (q - p) * 6 * t
+            if(t < 1/2) return q
+            if(t < 2/3) return p + (q - p) * (2/3 - t) * 6
+            return p
+        }
+
+        var q = l < 0.5 ? l * (1 + s) : l + s - l * s
+        var p = 2 * l - q
+        r = hue2rgb(p, q, h + 1/3)
+        g = hue2rgb(p, q, h)
+        b = hue2rgb(p, q, h - 1/3)
+    }
+
+    return {
+		r: Math.ceil(r * 255),
+		g: Math.ceil(g * 255),
+		b: Math.ceil(b * 255)
+	}
+}
