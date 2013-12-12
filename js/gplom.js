@@ -375,7 +375,7 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 			}
 			if (varNo === countSelVars-2) {
 				var curVar = catIdX === undefined || catIdX < 0 ? metricIdX : catIdX
-				drawText(gplom, x+w/2, y+h+textOffset, vars[curVar].name, 10, false, vars[curVar].detail)
+				drawText(gplom, x+w/2, y+h+textOffset, vars[curVar].name, 10, 0, vars[curVar].detail)
 				drawFilterX(gplom, x, y, w, h, curVar)
 			}
 			x += w + wMargin
@@ -383,7 +383,7 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 		
 		x = xGlobal
 		var curVar = catIdY === undefined || catIdY < 0 ? metricIdY : catIdY
-		drawText(gplom, x-textOffset, y+h/2, vars[curVar].name, 10, true, vars[curVar].detail)
+		drawText(gplom, x-textOffset, y+h/2, vars[curVar].name, 10, -90, vars[curVar].detail)
 		drawFilterY(gplom, x, y, w, h, curVar)
 		y += h + hMargin
 		metricIdX = undefined
@@ -783,7 +783,33 @@ function drawHistogramFirsttime(svg, x, y, w, h, catIdX, metricIdY) {
 		.attr("_y", round(y))
 		.attr("_w", round(w))
 		.attr("_h", round(h))
-		
+	
+	var labelsGid = "histLabels"+catIdX+"x"+metricIdY
+	
+	// the mouseover does not work on the group, there has to be a transparent rect
+	histG.append("rect")
+		.attr("x", x)
+		.attr("y", y)
+		.attr("width", w)
+		.attr("height", h)
+		.attr("fill", "transparent")
+		.on("mouseover", function() {
+			d3.select("#"+labelsGid).attr("style", "display: block; pointer-events: none;")
+		})
+		.on("mouseout", function() {
+			d3.select("#"+labelsGid).attr("style", "display: none; pointer-events: none;")
+		})
+	
+	var labels = histG.append("g")
+		.attr("id", labelsGid)
+		.attr("class", "histLabels")
+		.attr("style", "display: none; pointer-events: none;")
+	
+	var numCat = vars[catIdX].dictionary.length
+	for (var i=0; i<numCat; i++) {
+		drawText(labels, x+(i+0.5)*w/numCat+4, y-5, vars[catIdX].dictionary[i], "12", -45, undefined, true)
+	}
+	
 	updateHistogram(histG, x, y, w, h, catIdX, metricIdY, true)
 }
 
@@ -878,6 +904,7 @@ function updateHistogram(histG, x, y, w, h, catId, metricId, firsttime) {
 				.attr("stroke", "rgb(255,255,255)")
 				.attr("stroke-opacity", "0.5")
 				.attr("stroke-width", "1")
+				.attr("style", "pointer-events: none;")
 		}
 		
 //		histG
@@ -1195,15 +1222,16 @@ function epanechnikovKernel(scale) {
 	}
 }
 
-function drawText(svg, x, y, text, fontSize, vertical, title) {
+function drawText(svg, x, y, text, fontSize, angle, title, doNotAnchorMiddle) {
 	var textObj = svg.append("text")
-		.attr("style", "fill:#000000;font-family:sans-serif;font-size:"+fontSize+"px;text-anchor:middle;")
+		.attr("style", "fill:#000000;font-family:sans-serif;font-size:"+fontSize+"px;"
+			+(doNotAnchorMiddle === undefined ? "text-anchor:middle;" : ""))
 		.attr("x", round(x))
 		.attr("y", round(y))
 		.text(text)
 		
-	if (vertical)
-		textObj.attr("transform", "rotate(-90 "+round(x)+" "+round(y)+")")
+	if (angle !== 0)
+		textObj.attr("transform", "rotate("+angle+" "+round(x)+" "+round(y)+")")
 	if (title !== undefined)
 		textObj.attr("title", title)
 	

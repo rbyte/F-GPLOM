@@ -75,3 +75,7 @@ body {
     height: 100%;
     vertical-align: middle;
 }
+.histLabels text {
+	/* does not work on svg elements :( */
+	text-shadow: 1px 1px 3px #f00;
+}
