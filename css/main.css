@@ -77,5 +77,5 @@ body {
 }
 .histLabels text {
 	/* does not work on svg elements :( */
-	text-shadow: 1px 1px 3px #f00;
+	text-shadow: 0px 0px 3px #fff;
 }
