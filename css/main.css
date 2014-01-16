@@ -15,9 +15,11 @@ body {
 	list-style: none;
 	font-family: sans-serif;
 	font-size: 100%;
+	
 }
 #filter li {
 	padding: 5%;
+	border-top: solid #777 1px;
 }
 #varSelection {
 	position: fixed;

@@ -107,6 +107,8 @@ function main() {
 					for (var i=0; i<columns_spine.columns.length; i++)
 						transferExtName(columns_spine.columns[i])
 					
+					// the strings have line breaks that need to be replaced by whitespace before the json can be parsed correctly
+					// -> I did this manually
 					document.getElementById("jsOut").innerHTML = JSON.stringify(vars)
 					console.log("done!")
 				})
@@ -181,7 +183,7 @@ function main() {
 		}
 		
 		// restrict number of vars
-		var varsSelected = [1,2,4,5,6,9,66]
+		var varsSelected = [1,2,5,6,9,66]
 		var allAreSelected = false
 		for (var i=0; i<vars.length; i++) {
 			vars[i].isSelected = i < 0 || allAreSelected || varsSelected.indexOf(i) > -1
@@ -576,7 +578,7 @@ function setFilterRangeFor(varId, aOrB, val) {
 			.append("li")
 			.attr("id", id)
 			.attr("varId", varId)
-			.text(vars[varId].name)
+			.text(vars[varId].nameExt !== undefined ? vars[varId].nameExt : vars[varId].name)
 			.attr("style", "background-color: "+notAppliedColour+";")
 			.on("click", function(d,i) {
 				var elem = d3.select(this)
@@ -733,7 +735,8 @@ function getSliderSisters(d3elem) {
 }
 
 function drawFilterY(svg, x, y, w, h, varId) {
-	var size = 10
+	var size = 13
+	
 	var fss = new Array()
 	// the A is at the bottom!
 	fss.push(svg
@@ -756,7 +759,7 @@ function drawFilterY(svg, x, y, w, h, varId) {
 }
 
 function drawFilterX(svg, x, y, w, h, varId) {
-	var size = 10
+	var size = 13
 	
 	var fss = new Array()
 	fss.push(svg
@@ -819,7 +822,7 @@ function drawHistogramFirsttime(svg, x, y, w, h, catIdX, metricIdY) {
 		.attr("y", y)
 		.attr("width", w)
 		.attr("height", h)
-		.attr("fill", "transparent")
+		.attr("fill", "rgb(255,255,255)")
 		.on("mouseover", function() {
 			d3.select("#"+labelsGid).attr("style", "display: block; pointer-events: none;")
 		})
