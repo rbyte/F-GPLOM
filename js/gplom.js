@@ -11,12 +11,117 @@ function interfaceInit() {
 }
 
 function main() {
-	var afterParsingDo = function() {
+	
+	if (false)
+		d3.json("data/SHIP_2012_D_S2_20121129.json", function(jsonData) {
+			vars = []
+			var purgeDictEntriesNotFoundInData = true
+			var varId = 0
+			for (var key in jsonData) {
+				var jsonDataKey = jsonData[key]
+				console.assert(jsonDataKey.hasOwnProperty("name"))
+				console.assert(jsonDataKey.hasOwnProperty("data"))
+				console.assert(jsonDataKey.hasOwnProperty("description"))
+
+				var desc = jsonDataKey.description
+				console.assert(desc.hasOwnProperty("name"))
+				console.assert(desc.hasOwnProperty("dataType"))
+				console.assert(desc.hasOwnProperty("detail"))
+				var isMetric = desc.dataType === "metric"
+				var hasDict = desc.hasOwnProperty("dictionary")
+
+				// filter
+				if (key === "zz_nr")
+					continue
+
+				if (isMetric || hasDict) {
+					vars.push(desc)
+					vars[varId]["data"] = new Array(jsonDataKey.data.length)
+				} else {
+					// I dont know how to interpret that
+					console.log("skipping: "+desc.name)
+					continue
+				}
+
+				if (hasDict) {
+					var newDict = []
+					var oldToNewDictTranslation = {}
+					if (!purgeDictEntriesNotFoundInData)
+						for (var dictKey in desc.dictionary) {
+							newDict.push(desc.dictionary[dictKey])
+						}
+
+					for (var i=0; i<vars[varId].data.length; i++) {
+						var val = jsonDataKey.data[i]
+		//					console.assert(typeof val === "string")
+						if (!isMetric) {
+							console.assert(desc.dictionary.hasOwnProperty(val))
+						}
+
+						if (purgeDictEntriesNotFoundInData
+							&& oldToNewDictTranslation[val] === undefined
+							&& desc.dictionary[val] !== undefined) {
+								oldToNewDictTranslation[val] = "x" // check
+								newDict.push(desc.dictionary[val])
+						}
+
+						for (var k=0; k<newDict.length; k++)
+							if (desc.dictionary[val] === newDict[k])
+								vars[varId].data[i] = isMetric ? ""+k : k
+
+						if (isMetric && vars[varId].data[i] === undefined)
+							vars[varId].data[i] = convertStrToNumber(val)
+					}
+		//				console.log(newDict)
+					vars[varId].dictionary = newDict
+				} else {
+					if (desc.dataType === "metric") {
+						for (var i=0; i<vars[varId].data.length; i++)
+							vars[varId].data[i] = convertStrToNumber(jsonDataKey.data[i])
+					}
+				}
+				varId++
+			}
+			
+			function transferExtName(obj) {
+				for (var k=0; k<vars.length; k++) {
+					if (vars[k].name === obj.id) {
+						if (obj.id !== obj.name) {
+							vars[k].nameExt = obj.name
+						// yeah, consistent like a teeny girl
+						} else if (obj._comment !== undefined) {
+							vars[k].nameExt = obj._comment
+						}
+						if (obj.detail !== undefined && obj.detail.length > vars[k].detail.length)
+							vars[k].detail = obj.detail
+						
+						break;
+					}
+				}
+			}
+			
+			d3.json("data/columns_liver.json", function(columns_liver) {
+				d3.json("data/columns_spine.json", function(columns_spine) {
+					for (var i=0; i<columns_liver.columns.length; i++)
+						transferExtName(columns_liver.columns[i])
+					for (var i=0; i<columns_spine.columns.length; i++)
+						transferExtName(columns_spine.columns[i])
+					
+					document.getElementById("jsOut").innerHTML = JSON.stringify(vars)
+					console.log("done!")
+				})
+			})
+			
+		})
+	else
+	d3.json("data/SHIP_2012_D_S2_20121129_improved2.json", function(jsonData) {
+		vars = jsonData
+		
 		console.log("parsing data done")
 		var dataTypesCount = []
 		var dataTypes = ["ordinal", "metric", "dichotomous", "nominal"]
 		
-		if (false) {
+		if (true) {
 			for (var k=0; k<dataTypes.length; k++)
 				dataTypesCount.push(0)
 
@@ -31,11 +136,13 @@ function main() {
 				console.log(dataTypes[k]+": "+dataTypesCount[k])
 				for (var i=0; i<vars.length; i++)
 					if (vars[i].dataType === dataTypes[k]) {
-						console.log("\t"+vars[i].name+", "+vars[i].data.length+", "+vars[i].detail+", "+vars[i].dictionary)
+						console.log("\t"+vars[i].name)
+//						console.log("\t"+vars[i].data.length)
+						console.log("\t"+vars[i].nameExt)
+						console.log("\t"+vars[i].detail)
+//						console.log("\t"+vars[i].dictionary)
 					}
 			}
-			
-			document.write(JSON.stringify(vars))
 		}
 		
 		// setup masks
@@ -74,7 +181,7 @@ function main() {
 		}
 		
 		// restrict number of vars
-		var varsSelected = [1,2,4,5,6,8,9]
+		var varsSelected = [1,2,4,5,6,9,66]
 		var allAreSelected = false
 		for (var i=0; i<vars.length; i++) {
 			vars[i].isSelected = i < 0 || allAreSelected || varsSelected.indexOf(i) > -1
@@ -85,7 +192,7 @@ function main() {
 		for (var i=0; i<vars.length; i++) {
 			var li = varSelUL.append("li")
 				.attr("onclick", "selVarClick(this, "+i+")")
-				.text(vars[i].name)
+				.text(vars[i].nameExt !== undefined ? vars[i].nameExt : vars[i].name)
 			if (vars[i].isSelected)
 				li.attr("class", "selectedVar")
 		}
@@ -111,10 +218,7 @@ function main() {
 		}, false)
 		
 		console.log("done!")
-	}
-	
-//	parseData("data/SHIP_2012_D_S2_20121129.json", afterParsingDo)
-	parseDataFast("data/SHIP_2012_D_S2_20121129_improved.json", afterParsingDo)
+	})
 }
 
 function selVarClick(elem, varId) {
@@ -152,87 +256,6 @@ function onresize(event) {
 		.attr("height", height)
 
 	createGplomMatrix(svg, padW/2, padH/2, width-padW, height-padH)
-}
-
-function parseData(filename, callback) {
-	vars = []
-	var purgeDictEntriesNotFoundInData = true
-	d3.json(filename, function(jsonData) {
-		var varId = 0
-		for (var key in jsonData) {
-			var jsonDataKey = jsonData[key]
-			console.assert(jsonDataKey.hasOwnProperty("name"))
-			console.assert(jsonDataKey.hasOwnProperty("data"))
-			console.assert(jsonDataKey.hasOwnProperty("description"))
-			
-			var desc = jsonDataKey.description
-			console.assert(desc.hasOwnProperty("name"))
-			console.assert(desc.hasOwnProperty("dataType"))
-			console.assert(desc.hasOwnProperty("detail"))
-			var isMetric = desc.dataType === "metric"
-			var hasDict = desc.hasOwnProperty("dictionary")
-			
-			// filter
-			if (key === "zz_nr")
-				continue
-			
-			if (isMetric || hasDict) {
-				vars.push(desc)
-				vars[varId]["data"] = new Array(jsonDataKey.data.length)
-			} else {
-				// I dont know how to interpret that
-				console.log("skipping: "+desc.name)
-				continue
-			}
-			
-			if (hasDict) {
-				var newDict = []
-				var oldToNewDictTranslation = {}
-				if (!purgeDictEntriesNotFoundInData)
-					for (var dictKey in desc.dictionary) {
-						newDict.push(desc.dictionary[dictKey])
-					}
-				
-				for (var i=0; i<vars[varId].data.length; i++) {
-					var val = jsonDataKey.data[i]
-//					console.assert(typeof val === "string")
-					if (!isMetric) {
-						console.assert(desc.dictionary.hasOwnProperty(val))
-					}
-
-					if (purgeDictEntriesNotFoundInData
-						&& oldToNewDictTranslation[val] === undefined
-						&& desc.dictionary[val] !== undefined) {
-							oldToNewDictTranslation[val] = "x" // check
-							newDict.push(desc.dictionary[val])
-					}
-					
-					for (var k=0; k<newDict.length; k++)
-						if (desc.dictionary[val] === newDict[k])
-							vars[varId].data[i] = isMetric ? ""+k : k
-					
-					if (isMetric && vars[varId].data[i] === undefined)
-						vars[varId].data[i] = convertStrToNumber(val)
-				}
-//				console.log(newDict)
-				vars[varId].dictionary = newDict
-			} else {
-				if (desc.dataType === "metric") {
-					for (var i=0; i<vars[varId].data.length; i++)
-						vars[varId].data[i] = convertStrToNumber(jsonDataKey.data[i])
-				}
-			}
-			varId++
-		}
-		callback()
-	})
-}
-
-function parseDataFast(filename, callback) {
-	d3.json(filename, function(jsonData) {
-		vars = jsonData
-		callback()
-	})
 }
 
 function defineGradients(svg) {
@@ -375,7 +398,9 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 			}
 			if (varNo === countSelVars-2) {
 				var curVar = catIdX === undefined || catIdX < 0 ? metricIdX : catIdX
-				drawText(gplom, x+w/2, y+h+textOffset, vars[curVar].name, 10, 0, vars[curVar].detail)
+				drawText(gplom, x+w/2, y+h+textOffset,
+					vars[curVar].nameExt !== undefined ? vars[curVar].nameExt : vars[curVar].name,
+					10, 0, vars[curVar].detail)
 				drawFilterX(gplom, x, y, w, h, curVar)
 			}
 			x += w + wMargin
@@ -383,7 +408,9 @@ function createGplomMatrix(svg, xGlobal, yGlobal, wGlobal, hGlobal) {
 		
 		x = xGlobal
 		var curVar = catIdY === undefined || catIdY < 0 ? metricIdY : catIdY
-		drawText(gplom, x-textOffset, y+h/2, vars[curVar].name, 10, -90, vars[curVar].detail)
+		drawText(gplom, x-textOffset, y+h/2,
+			vars[curVar].nameExt !== undefined ? vars[curVar].nameExt : vars[curVar].name,
+			10, -90, vars[curVar].detail)
 		drawFilterY(gplom, x, y, w, h, curVar)
 		y += h + hMargin
 		metricIdX = undefined
