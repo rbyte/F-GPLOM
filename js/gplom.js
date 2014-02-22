@@ -123,9 +123,16 @@ function main() {
 		var dataTypesCount = []
 		var dataTypes = ["ordinal", "metric", "dichotomous", "nominal"]
 		
-		if (true) {
+		if (false) {
 			for (var k=0; k<dataTypes.length; k++)
 				dataTypesCount.push(0)
+
+			for (var i=0; i<vars.length; i++)
+				if (vars[i].dictionary !== undefined
+					&& (vars[i].dataType === "ordinal" || vars[i].dataType === "nominal")) {
+					console.log(vars[i].dictionary.length)
+				}
+			
 
 			for (var i=0; i<vars.length; i++)
 				for (var k=0; k<dataTypes.length; k++)
@@ -138,10 +145,11 @@ function main() {
 				console.log(dataTypes[k]+": "+dataTypesCount[k])
 				for (var i=0; i<vars.length; i++)
 					if (vars[i].dataType === dataTypes[k]) {
-						console.log("\t"+vars[i].name)
+//						console.log("\t"+vars[i].name)
 //						console.log("\t"+vars[i].data.length)
-						console.log("\t"+vars[i].nameExt)
-						console.log("\t"+vars[i].detail)
+//						console.log("\t"+vars[i].nameExt)
+//						console.log("\t"+vars[i].detail)
+//						console.log("\t"+vars[i].dictionary.length)
 //						console.log("\t"+vars[i].dictionary)
 					}
 			}
@@ -612,7 +620,7 @@ var ondrag = d3.behavior.drag().on("drag", function() {
 	var mouseX = d3.event.x
 	var mouseY = d3.event.y
 	var d3obj = d3.select(this)
-	var tDelay = 200
+	var tDelay = 400
 	var x = parseFloat(d3obj.attr("_x"))
 	var y = parseFloat(d3obj.attr("_y"))
 	var w = parseFloat(d3obj.attr("_w"))
@@ -907,17 +915,19 @@ function updateHistogram(histG, x, y, w, h, catId, metricId, firsttime) {
 				.attr("stroke-width", "1")
 		}
 		var td = firsttime !== undefined ? 0 : 300
+		d3.select("#"+barId)
+			.append("title").text(vars[catId].dictionary[i]+": "+round(input[i][0]+input[i][1]))
 		d3.select("#"+barId).transition().duration(td)
 			.attr("y", round(yy))
 			.attr("height", round(barHeight))
-			.attr("title", vars[catId].dictionary[i]+": "+round(input[i][0]+input[i][1]))
 		d3.select("#"+strokeId).transition().duration(td)
 			.attr("y1", round(yy-1))
 			.attr("y2", round(yy-1))
+		d3.select("#"+barFId)
+			.append("title").text(vars[catId].dictionary[i]+": "+round(input[i][0]))
 		d3.select("#"+barFId).transition().duration(td)
 			.attr("y", round(yyF))
 			.attr("height", round(barHeightF))
-			.attr("title", vars[catId].dictionary[i]+": "+round(input[i][0]))
 		d3.select("#"+strokeFId).transition().duration(td)
 			.attr("y1", round(yyF-1))
 			.attr("y2", round(yyF-1))
@@ -1084,7 +1094,7 @@ function updateHeatmap(heatmap, x, y, w, h, id0, id1, firsttime) {
 			} else {
 				cell = d3.select("#"+cellId)
 			}
-			cell.attr("title", vars[id0].dictionary[i]+" x "+vars[id1].dictionary[k]
+			cell.append("title").text(vars[id0].dictionary[i]+" x "+vars[id1].dictionary[k]
 				+": "+round(input[i][k][0]+input[i][k][1]))
 			
 			var colorP = (input[i][k][0]+input[i][k][1])/max
@@ -1195,7 +1205,7 @@ function updateScatterplot(scatter, x, y, w, h, id0, id1) {
 			.attr("r", 4)
 			.attr("cx", round(x+w*((vars[id0].data[i]-Xmin)/(Xmax-Xmin))))
 			.attr("cy", round(y+h*(1-(vars[id1].data[i]-Ymin)/(Ymax-Ymin))))
-			.attr("title", round(vars[id0].data[i])+", "+round(vars[id1].data[i]))
+			.append("title").text(round(vars[id0].data[i])+", "+round(vars[id1].data[i]))
 		}
 	}
 }
@@ -1263,7 +1273,7 @@ function drawText(svg, x, y, text, fontSize, angle, title, doNotAnchorMiddle) {
 	if (angle !== 0)
 		textObj.attr("transform", "rotate("+angle+" "+round(x)+" "+round(y)+")")
 	if (title !== undefined)
-		textObj.attr("title", title)
+		textObj.append("title").text(title)
 	
 	if (false)
 	svg
